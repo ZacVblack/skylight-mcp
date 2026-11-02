@@ -491,9 +491,9 @@ Meals and recipes need Skylight Plus.
 | Tool | Effect | Description |
 |------|--------|-------------|
 | `get_meal_categories` | read | Breakfast, Lunch, Dinner, Snack and their IDs |
-| `get_meal_sittings` | read | Scheduled meals in a date range, with sitting IDs |
+| `get_meal_sittings` | read | Scheduled meals in a date range, with sitting IDs; `details: true` also prints notes and instructions |
 | `create_meal_sitting` | write | Schedule a meal on a date (free text or a saved recipe). `repeat: "weekly"` repeats it every week on that weekday. |
-| `update_meal_sitting` | write | Rename, re-categorise, or add a note to a meal, by sitting ID and its current date; one-offs can also be moved. Repeating meals need `scope` (`one`, `future`, `all`), are preview-first and need `confirm: true`; they cannot be moved. `one` and `future` return a new sitting ID. |
+| `update_meal_sitting` | write | Rename, re-categorise, or set the note or the instructions (`description`) of a meal, by sitting ID and its current date; one-offs can also be moved. Repeating meals need `scope` (`one`, `future`, `all`), are preview-first and need `confirm: true`; they cannot be moved. `one` and `future` return a new sitting ID. |
 | `delete_meal_sitting` | destructive | Delete a meal. For a repeating meal, `scope` is `one` (default), `future` or `all` (whole series). Previews unless `confirm: true`; reports success only when Skylight confirms the removal. A meal edited on its own after being in a series is refused. |
 | `get_recipes` / `get_recipe` | read | Browse saved recipes |
 | `create_recipe` / `update_recipe` | write | Add or change a recipe |

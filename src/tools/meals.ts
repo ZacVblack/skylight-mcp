@@ -303,13 +303,15 @@ Use this when:
 Parameters:
 - date: Start date (defaults to today)
 - dateEnd: End date (defaults to 7 days from start)
+- details: true to also print each meal's note and instructions (off by default; they can be long)
 
 Returns: List of scheduled meals.`,
     {
       date: z.string().optional().describe("Start date (YYYY-MM-DD or 'today')"),
       dateEnd: z.string().optional().describe("End date (YYYY-MM-DD)"),
+      details: z.boolean().optional().describe("Also print each meal's note and instructions"),
     },
-    async ({ date, dateEnd }) => {
+    async ({ date, dateEnd, details }) => {
       try {
         const config = getConfig();
         const startDate = date ? parseDate(date, config.timezone) : getTodayDate(config.timezone);
@@ -346,11 +348,18 @@ Returns: List of scheduled meals.`,
           const category = categoryId ? (categoryName.get(categoryId) ?? `category ${categoryId}`) : "uncategorised";
           const recipeId = sitting.relationships?.meal_recipe?.data?.id;
           const what = sitting.attributes.summary?.trim() || (recipeId ? `recipe ${recipeId}` : "(empty)");
+          const extra: string[] = [];
+          if (details) {
+            const n = typeof sitting.attributes.note === "string" ? sitting.attributes.note.trim() : "";
+            const desc = typeof sitting.attributes.description === "string" ? sitting.attributes.description.trim() : "";
+            if (desc) extra.push(`  instructions: ${desc}`);
+            if (n) extra.push(`  note: ${n}`);
+          }
           for (const d of dates) {
             if (d < startDate || d > endDate) continue;
             rows.push({
               date: d,
-              line: `- ${formatDateForDisplay(d)} ${category}: ${what}${recipeId ? ` (recipe ID: ${recipeId})` : ""} [sitting ID: ${sitting.id}]`,
+              line: [`- ${formatDateForDisplay(d)} ${category}: ${what}${recipeId ? ` (recipe ID: ${recipeId})` : ""} [sitting ID: ${sitting.id}]`, ...extra].join("\n"),
             });
           }
         }
@@ -446,7 +455,8 @@ Parameters:
 - date (required): the meal's CURRENT date (YYYY-MM-DD), also from get_meal_sittings
 - newDate: move the meal to this date
 - summary: new meal name
-- note: new note
+- note: new note (family notes, caveats)
+- description: the "Instructions or ingredients" field (recipe link, steps)
 - mealCategoryId: move to another meal category (use get_meal_categories)
 
 - scope: required for a repeating meal. "one" changes only that date, which becomes a standalone meal with a NEW sitting ID that cannot be edited or deleted here afterwards. "future" changes that date and every later one: the series splits and the later part gets a NEW sitting ID. "all" changes every occurrence, past ones included, keeping the series' start.
@@ -461,15 +471,16 @@ Returns: What changed.`,
       newDate: z.string().optional().describe("Move the meal to this date (YYYY-MM-DD or 'tomorrow')"),
       summary: z.string().max(200).optional().describe("New meal name"),
       note: z.string().max(500).optional().describe("New note"),
+      description: z.string().max(2000).optional().describe("New instructions or ingredients text (limit not confirmed against Skylight)"),
       mealCategoryId: z.string().optional().describe("New meal category ID"),
       scope: z.enum(["one", "future", "all"]).optional().describe("Repeating meals only: one, future or all"),
       confirm: z.boolean().optional().describe("Repeating meals only: set true to apply. Default: preview only."),
     },
-    async ({ sittingId, date, newDate, summary, note, mealCategoryId, scope, confirm }) => {
+    async ({ sittingId, date, newDate, summary, note, description, mealCategoryId, scope, confirm }) => {
       try {
-        if (newDate === undefined && summary === undefined && note === undefined && mealCategoryId === undefined) {
+        if (newDate === undefined && summary === undefined && note === undefined && description === undefined && mealCategoryId === undefined) {
           return {
-            content: [{ type: "text" as const, text: "Nothing to change. Give newDate, summary, note or mealCategoryId." }],
+            content: [{ type: "text" as const, text: "Nothing to change. Give newDate, summary, note, description or mealCategoryId." }],
             isError: true,
           };
         }
@@ -499,6 +510,7 @@ Returns: What changed.`,
           if (summary !== undefined) out.push(`renamed "${was}" to "${summary.trim()}"`);
           if (target && target !== current) out.push(`moved from ${formatDateForDisplay(current)} to ${formatDateForDisplay(target)}`);
           if (note !== undefined) out.push("note updated");
+          if (description !== undefined) out.push("instructions updated");
           if (mealCategoryId !== undefined) out.push(`category set to ${mealCategoryId}`);
           return out;
         };
@@ -543,6 +555,7 @@ Returns: What changed.`,
             date: current,
             summary: summary?.trim(),
             note,
+            description,
             mealCategoryId,
             scope,
             seriesStart,
@@ -575,6 +588,7 @@ Returns: What changed.`,
           newDate: target,
           summary: summary?.trim(),
           note,
+          description,
           mealCategoryId,
         });
 
@@ -582,6 +596,7 @@ Returns: What changed.`,
         if (summary !== undefined) changes.push(`renamed "${was}" to "${summary.trim()}"`);
         if (target && target !== current) changes.push(`moved from ${formatDateForDisplay(current)} to ${formatDateForDisplay(target)}`);
         if (note !== undefined) changes.push("note updated");
+        if (description !== undefined) changes.push("instructions updated");
         if (mealCategoryId !== undefined) changes.push(`category set to ${mealCategoryId}`);
         return {
           content: [{ type: "text" as const, text: `Updated meal (sitting ID: ${sittingId}): ${changes.join("; ")}.` }],
