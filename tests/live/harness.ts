@@ -77,6 +77,16 @@ async function connect(): Promise<Connection> {
   const config = loadConfig();
   const client = await initializeClient(config, defaultCredentialStore());
   const hasPlus = client.hasPlus();
+  const status = client.getSubscriptionStatus();
+  console.info(`[live] subscription status detected: ${status ?? "unknown (plus_access check failed)"}`);
+  // A false "no Plus" makes every Plus-gated test return early and report green
+  // without calling Skylight. Fail instead, unless the run is knowingly on a free account.
+  if (!hasPlus && process.env.SKYLIGHT_LIVE_ALLOW_FREE !== "1") {
+    throw new Error(
+      `Subscription detected as "${status ?? "unknown"}", so Plus-gated live tests would be skipped and pass without running. ` +
+        "If this account really is free, set SKYLIGHT_LIVE_ALLOW_FREE=1. Otherwise the /api/plus_access check is wrong or failing.",
+    );
+  }
 
   const server = new McpServer({ name: "skylight-live", version: "0.0.0" });
   registerTools(server, { hasPlus, photos: false });
