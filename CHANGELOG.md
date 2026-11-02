@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.8.7] - 2026-11-02
+
 ### Fixed
 - The profile list was cached process-wide, never expired, and was not tied to a frame. On the hosted Worker a second user's request in the same process could be served the first user's profile names; locally a profile added in Skylight did not appear until a restart. Lookups are now scoped to the current request's client (nothing crosses users or frames on the Worker), expire after 5 minutes locally, and an unknown profile name triggers one fresh look before it is rejected.
 
