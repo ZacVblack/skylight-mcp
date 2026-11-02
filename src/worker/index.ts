@@ -30,7 +30,7 @@ import {
   type PendingLogin,
 } from "../api/oauth.js";
 import { HOSTED_EFFECTS, handleMcpRequest } from "./mcp.js";
-import { consentPage, errorPage, html, landingPage, pastePage } from "./pages.js";
+import { consentPage, errorPage, html, landingPage, pastePage, setupPage, versionResponse } from "./pages.js";
 import { accessTokenTtlSeconds, isSkylightProps, toCredential, withCredential, type SkylightProps } from "./props.js";
 
 export interface Env {
@@ -236,6 +236,8 @@ export default {
     try {
       if (path === "/" && request.method === "GET") return landingPage();
       if (path === "/healthz") return new Response("ok");
+      if (path === "/version" && request.method === "GET") return versionResponse(VERSION);
+      if (path === "/setup" && request.method === "GET") return setupPage(url.origin, env.DEFAULT_TIMEZONE ?? "America/New_York");
 
       if (path === "/mcp" || path.startsWith("/.well-known/oauth-protected-resource")) {
         return await resource.fetch(request, env, ctx);

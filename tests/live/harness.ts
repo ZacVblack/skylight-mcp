@@ -71,8 +71,13 @@ interface Connection {
 }
 
 async function connect(): Promise<Connection> {
-  if (!process.env.SKYLIGHT_FRAME_ID) {
-    throw new Error("Set SKYLIGHT_FRAME_ID in your shell (not in a file in this repo) before running live tests.");
+  const missing = ["SKYLIGHT_LIVE", "SKYLIGHT_FRAME_ID", "SKYLIGHT_TIMEZONE"].filter((k) => !process.env[k]);
+  if (missing.length > 0) {
+    throw new Error(
+      `Not set in this terminal: ${missing.join(", ")}. Each new terminal starts without them. Run all three (use your own frame ID and timezone, never in a file in this repo):\n` +
+        "  export SKYLIGHT_LIVE=1 SKYLIGHT_FRAME_ID=your_frame_id SKYLIGHT_TIMEZONE=America/New_York\n" +
+        "  npm run test:live",
+    );
   }
   const config = loadConfig();
   const client = await initializeClient(config, defaultCredentialStore());
