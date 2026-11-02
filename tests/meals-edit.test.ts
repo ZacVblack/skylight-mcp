@@ -335,3 +335,113 @@ describe("create_meal_sitting with repeat", () => {
     expect(seen.some((s) => s.method === "POST")).toBe(false);
   });
 });
+
+// Edit scopes on a repeating meal. Shapes from the 2026-11-01 captures and the
+// 2026-11-02 live probes: the response to one/future holds a NEW sitting for the
+// edited part; all keeps the id; the series start is not exposed, and an "all"
+// edit must carry the real start or it deletes earlier occurrences.
+describe("update_meal_sitting on a repeating meal", () => {
+  const DAY = "2026-12-14";
+  const withInstances = (instances: string[]) => ({ ...series, attributes: { ...series.attributes, instances } });
+  const edited = (id: string, rrule: string | null, instances: string[]) => ({
+    ...series,
+    id,
+    attributes: { ...series.attributes, summary: "Renamed", rrule, instances },
+  });
+  const patches = (seen: Seen[]) => seen.filter((s) => s.method === "PATCH");
+  const daysBack = (date: string, n: number) => new Date(Date.parse(date) - n * 86_400_000).toISOString().slice(0, 10);
+
+  it("without a scope it explains the choices and writes nothing", async () => {
+    const seen = stub([series]);
+    const out = await read(await local("update_meal_sitting", { sittingId: "5002", date: DAY, summary: "Renamed" }));
+    expect(out.isError).toBe(true);
+    expect(out.text).toMatch(/scope/);
+    expect(seen.some((s) => s.method !== "GET")).toBe(false);
+  });
+
+  it("previews every scope and changes nothing without confirm", async () => {
+    const seen = stub([withInstances(["2026-11-30", "2026-12-07", DAY])]);
+    for (const scope of ["one", "future", "all"]) {
+      const out = await read(await local("update_meal_sitting", { sittingId: "5002", date: DAY, summary: "Renamed", scope }));
+      expect(out.isError, scope).toBe(false);
+      expect(out.text, scope).toContain("NOT CHANGED");
+    }
+    expect(seen.some((s) => s.method !== "GET")).toBe(false);
+  });
+
+  it("scope one sends apply_to=one with the whole form and the rule unchanged, and reports the new id", async () => {
+    const seen = stub(
+      [series],
+      { data: [edited("6001", null, [DAY]), { ...series, attributes: { ...series.attributes, instances: [] } }], meta: {} }
+    );
+    const out = await read(await local("update_meal_sitting", { sittingId: "5002", date: DAY, summary: "Renamed", scope: "one", confirm: true }));
+    expect(out.isError, out.text).toBe(false);
+    const patch = patches(seen)[0]!;
+    expect(applyTo(patch.url)).toBe("one");
+    expect(new URL(patch.url).pathname).toBe("/api/frames/frame-1/meals/sittings/5002/instances/2026-12-14");
+    expect(patch.version).toBe("2026-10-15");
+    expect(patch.body).toMatchObject({ date: DAY, summary: "Renamed", rrule: MONDAY_RULE, meal_category_id: "12", profile_ids: ["p1"] });
+    expect(out.text).toContain("sitting ID 6001");
+  });
+
+  it("scope future sends apply_to=future, the occurrence date and the rule unchanged, and reports the new id", async () => {
+    const seen = stub([series], { data: [edited("6002", MONDAY_RULE, [DAY, "2026-12-21"]), series], meta: {} });
+    const out = await read(await local("update_meal_sitting", { sittingId: "5002", date: DAY, summary: "Renamed", scope: "future", confirm: true }));
+    expect(out.isError, out.text).toBe(false);
+    const patch = patches(seen)[0]!;
+    expect(applyTo(patch.url)).toBe("future");
+    expect(patch.body).toMatchObject({ date: DAY, rrule: MONDAY_RULE });
+    expect(out.text).toContain("sitting ID 6002");
+  });
+
+  it("scope all puts the series START in the body, not the occurrence date, and keeps the id", async () => {
+    const seen = stub([withInstances(["2026-11-30", "2026-12-07", DAY])], { data: [edited("5002", MONDAY_RULE, [DAY])], meta: {} });
+    const out = await read(await local("update_meal_sitting", { sittingId: "5002", date: DAY, summary: "Renamed", scope: "all", confirm: true }));
+    expect(out.isError, out.text).toBe(false);
+    const patch = patches(seen)[0]!;
+    expect(applyTo(patch.url)).toBe("all");
+    expect(new URL(patch.url).pathname).toBe("/api/frames/frame-1/meals/sittings/5002/instances/2026-12-14");
+    expect((patch.body as { date: string }).date).toBe("2026-11-30");
+    expect(patch.body).toMatchObject({ rrule: MONDAY_RULE });
+    expect(out.text).toMatch(/whole series/);
+  });
+
+  it("scope all refuses when the start cannot be told apart from the search window's edge", async () => {
+    const edge = daysBack(DAY, 1825);
+    const seen = stub([withInstances([edge, DAY])]);
+    const out = await read(await local("update_meal_sitting", { sittingId: "5002", date: DAY, summary: "Renamed", scope: "all", confirm: true }));
+    expect(out.isError).toBe(true);
+    expect(out.text).toMatch(/start date could not be determined/);
+    expect(seen.some((s) => s.method !== "GET")).toBe(false);
+  });
+
+  it("a repeating meal cannot be moved to another day, even with a scope and confirm", async () => {
+    const seen = stub([series]);
+    const out = await read(await local("update_meal_sitting", { sittingId: "5002", date: DAY, newDate: "2026-12-15", scope: "one", confirm: true }));
+    expect(out.isError).toBe(true);
+    expect(seen.some((s) => s.method !== "GET")).toBe(false);
+  });
+
+  it("a one-off ignores scope and confirm and sends no apply_to", async () => {
+    const seen = stub([oneOff]);
+    const out = await read(await local("update_meal_sitting", { sittingId: "5001", date: "2026-11-03", summary: "x", scope: "all" }));
+    expect(out.isError, out.text).toBe(false);
+    expect(applyTo(patches(seen)[0]!.url)).toBeNull();
+    expect((patches(seen)[0]!.body as { rrule: unknown }).rrule).toBeNull();
+  });
+
+  it("works through the hosted server, and the token only goes to the pinned host", async () => {
+    const seen = stub([withInstances(["2026-11-30", DAY])], { data: [edited("5002", MONDAY_RULE, [DAY])], meta: {} });
+    const out = await read(await hosted("update_meal_sitting", { sittingId: "5002", date: DAY, summary: "Renamed", scope: "all", confirm: true }));
+    expect(out.isError, out.text).toBe(false);
+    expect(patches(seen)).toHaveLength(1);
+    expect(seen.every((s) => s.url.startsWith("https://app.ourskylight.com/"))).toBe(true);
+  });
+
+  it("an id or date cannot steer the path", async () => {
+    const seen = stub([series]);
+    const bad = await read(await local("update_meal_sitting", { sittingId: "5002/../../chores", date: DAY, summary: "x", scope: "all", confirm: true }));
+    expect(bad.isError).toBe(true);
+    expect(seen.some((s) => s.method !== "GET")).toBe(false);
+  });
+});

@@ -348,16 +348,50 @@ export function mealKind(sitting: MealSittingResource): MealKind {
   return "one-off";
 }
 
-/** Editing repeating meals is not supported yet; only one-offs are edited here. */
+/** A one-off is the only kind that can be edited without a scope; detached occurrences are never edited here. */
 function assertOneOff(sitting: MealSittingResource): void {
-  if (mealKind(sitting) !== "one-off") {
+  const kind = mealKind(sitting);
+  if (kind === "detached") {
     throw new Error(
-      "This meal repeats. Editing an occurrence of a repeating meal is not supported here; use the Skylight app."
+      "This occurrence was edited on its own and is now a standalone meal that Skylight still marks as repeating. It cannot be edited here; use the Skylight app."
     );
+  }
+  if (kind === "series") {
+    throw new Error("This meal repeats. Say which occurrences to change with scope: one, future or all.");
   }
 }
 
 export type MealDeleteScope = "one" | "future" | "all";
+export type MealEditScope = "one" | "future" | "all";
+
+/** How far back the series start is searched for. A series older than this cannot be edited with scope "all". */
+export const SERIES_START_WINDOW_DAYS = 1825;
+
+/**
+ * Skylight does not expose a series' start date on the resource (captured live
+ * 2026-11-02: attributes are description, draft, instances, note, recurring,
+ * rrule, summary). An edit with apply_to=all moves the series start to the body
+ * date, silently dropping earlier occurrences, so the body must carry the real
+ * start. The earliest instance over a wide read window is that start, provided
+ * the window reaches back past it. If the earliest instance sits within two
+ * weeks of the window's edge the start may be earlier still, so return null and
+ * let the caller refuse rather than guess.
+ */
+export async function findSeriesStart(sittingId: string, date: string): Promise<string | null> {
+  assertSittingId(sittingId);
+  assertIsoDate(date);
+  const from = addDays(date, -SERIES_START_WINDOW_DAYS);
+  const response = await getClient().request<SittingEnvelope>("/api/frames/{frameId}/meals/sittings", {
+    method: "GET",
+    params: { date_min: from, date_max: addDays(date, 1), include: "meal_category,meal_recipe,profiles" },
+    apiVersion: MEAL_EDIT_API_VERSION,
+  });
+  const found = (response.data ?? []).find((x) => x.id === sittingId);
+  const first = [...(found?.attributes.instances ?? [])].sort()[0];
+  if (!first) return null;
+  if (first < addDays(from, 14)) return null;
+  return first;
+}
 
 export interface UpdateMealSittingOptions {
   existing: MealSittingResource;
@@ -368,23 +402,54 @@ export interface UpdateMealSittingOptions {
   summary?: string;
   note?: string;
   mealCategoryId?: string;
+  /** Required for a repeating meal: which occurrences the change applies to. */
+  scope?: MealEditScope;
+  /** For scope "all": the series' original start date, from findSeriesStart. */
+  seriesStart?: string;
+}
+
+export interface MealUpdateResult {
+  /**
+   * The sitting that now holds the edited occurrence. For a one-off or scope
+   * "all" it is the same id. For "one" (a detached copy) and "future" (a split)
+   * Skylight issues a new id; null if the response did not show it.
+   */
+  sittingId: string | null;
 }
 
 /**
- * Edit a one-off sitting the way the web app does: PATCH the whole form to
+ * Edit a sitting the way the web app does: PATCH the whole form to
  * /meals/sittings/{id}/instances/{currentDate}. Fields not being changed are
  * sent back as they are, because the API takes the full form.
  */
-export async function updateMealSitting(options: UpdateMealSittingOptions): Promise<void> {
+export async function updateMealSitting(options: UpdateMealSittingOptions): Promise<MealUpdateResult> {
   const { existing } = options;
-  assertOneOff(existing);
+  const kind = mealKind(existing);
   const date = assertIsoDate(options.date);
   const target = assertIsoDate(options.newDate ?? date);
+  let scope: MealEditScope | undefined;
+  let bodyDate = target;
+  if (kind === "series") {
+    scope = options.scope;
+    if (!scope) assertOneOff(existing);
+    if (target !== date) {
+      throw new Error("Moving an occurrence of a repeating meal to another day is not supported here; use the Skylight app.");
+    }
+    if (scope === "all") {
+      // The body date becomes the series' start. Anything but the real start deletes history.
+      if (!options.seriesStart) {
+        throw new Error("Cannot edit the whole series: its start date could not be determined, and guessing would delete earlier occurrences.");
+      }
+      bodyDate = assertIsoDate(options.seriesStart);
+    }
+  } else {
+    assertOneOff(existing);
+  }
   const a = existing.attributes;
   const payload = {
-    date: target,
+    date: bodyDate,
     note: options.note ?? (typeof a.note === "string" ? a.note : ""),
-    rrule: null,
+    rrule: kind === "series" ? a.rrule : null,
     summary: options.summary ?? a.summary ?? "",
     description: typeof a.description === "string" ? a.description : "",
     meal_category_id: options.mealCategoryId ?? existing.relationships?.meal_category?.data?.id ?? null,
@@ -394,10 +459,17 @@ export async function updateMealSitting(options: UpdateMealSittingOptions): Prom
     ),
     saveToRecipeBox: false,
   };
-  await getClient().request<SittingEnvelope>(
+  const params: Record<string, string> = instanceQuery(date);
+  if (scope) params.apply_to = scope;
+  const response = await getClient().request<SittingEnvelope>(
     `/api/frames/{frameId}/meals/sittings/${assertSittingId(existing.id)}/instances/${date}`,
-    { method: "PATCH", body: payload, params: instanceQuery(date), apiVersion: MEAL_EDIT_API_VERSION }
+    { method: "PATCH", body: payload, params, apiVersion: MEAL_EDIT_API_VERSION }
   );
+  if (scope === "one" || scope === "future") {
+    const moved = (response.data ?? []).find((x) => x.id !== existing.id && x.attributes.instances?.includes(date));
+    return { sittingId: moved?.id ?? null };
+  }
+  return { sittingId: existing.id };
 }
 
 /**

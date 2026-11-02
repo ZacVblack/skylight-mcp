@@ -16,7 +16,9 @@ import {
   updateMealSitting,
   deleteMealSitting,
   mealKind,
+  findSeriesStart,
   type MealDeleteScope,
+  type MealEditScope,
 } from "../api/endpoints/meals.js";
 import { parseDate, formatDateForDisplay, getTodayDate, getDateOffset } from "../utils/dates.js";
 import { addDays } from "../utils/schedule.js";
@@ -447,8 +449,10 @@ Parameters:
 - note: new note
 - mealCategoryId: move to another meal category (use get_meal_categories)
 
-Give at least one change. Only one-off meals can be edited here; repeating meals
-must be edited in the Skylight app.
+- scope: required for a repeating meal. "one" changes only that date, which becomes a standalone meal with a NEW sitting ID that cannot be edited or deleted here afterwards. "future" changes that date and every later one: the series splits and the later part gets a NEW sitting ID. "all" changes every occurrence, past ones included, keeping the series' start.
+- confirm: repeating meals only. Must be true to apply; without it nothing changes and the effect is shown.
+
+Give at least one change. A repeating meal cannot be moved to another day here, and an occurrence that was already edited on its own cannot be edited here; use the Skylight app for those.
 
 Returns: What changed.`,
     {
@@ -458,8 +462,10 @@ Returns: What changed.`,
       summary: z.string().max(200).optional().describe("New meal name"),
       note: z.string().max(500).optional().describe("New note"),
       mealCategoryId: z.string().optional().describe("New meal category ID"),
+      scope: z.enum(["one", "future", "all"]).optional().describe("Repeating meals only: one, future or all"),
+      confirm: z.boolean().optional().describe("Repeating meals only: set true to apply. Default: preview only."),
     },
-    async ({ sittingId, date, newDate, summary, note, mealCategoryId }) => {
+    async ({ sittingId, date, newDate, summary, note, mealCategoryId, scope, confirm }) => {
       try {
         if (newDate === undefined && summary === undefined && note === undefined && mealCategoryId === undefined) {
           return {
@@ -488,6 +494,81 @@ Returns: What changed.`,
         }
 
         const was = existing.attributes.summary?.trim() || "(no name)";
+        const describeChanges = (): string[] => {
+          const out: string[] = [];
+          if (summary !== undefined) out.push(`renamed "${was}" to "${summary.trim()}"`);
+          if (target && target !== current) out.push(`moved from ${formatDateForDisplay(current)} to ${formatDateForDisplay(target)}`);
+          if (note !== undefined) out.push("note updated");
+          if (mealCategoryId !== undefined) out.push(`category set to ${mealCategoryId}`);
+          return out;
+        };
+
+        if (mealKind(existing) === "series") {
+          const fail = (text: string) => ({ content: [{ type: "text" as const, text }], isError: true });
+          if (!scope) {
+            return fail(
+              `"${was}" repeats. Say which occurrences to change with scope: "one" (only ${formatDateForDisplay(current)}), "future" (that date and every later one) or "all" (the whole series). Nothing was changed.`
+            );
+          }
+          if (target && target !== current) {
+            return fail("A repeating meal cannot be moved to another day here; use the Skylight app. Nothing was changed.");
+          }
+          let seriesStart: string | undefined;
+          if (scope === "all") {
+            seriesStart = (await findSeriesStart(sittingId, current)) ?? undefined;
+            if (!seriesStart) {
+              return fail(
+                "Cannot edit the whole series: its start date could not be determined (Skylight does not state it, and this series may begin more than five years back). Editing without the real start would delete earlier occurrences. Use scope future, or the Skylight app. Nothing was changed."
+              );
+            }
+          }
+          const effect: Record<MealEditScope, string> = {
+            one: `change only the ${formatDateForDisplay(current)} occurrence of "${was}". It becomes a standalone meal with a NEW sitting ID, and this tool cannot edit or delete it afterwards (use the Skylight app); the series continues without it`,
+            future: `change the ${formatDateForDisplay(current)} occurrence of "${was}" and every later one. The series splits: earlier dates stay under the current sitting ID, the rest moves to a NEW sitting ID`,
+            all: `change EVERY occurrence of "${was}", past ones included${seriesStart ? ` (the series starts ${formatDateForDisplay(seriesStart)}, which is kept)` : ""}`,
+          };
+          const list = describeChanges();
+          if (!confirm) {
+            return {
+              content: [
+                {
+                  type: "text" as const,
+                  text: `NOT CHANGED. This would ${effect[scope]}: ${list.join("; ")}. Run again with confirm: true to apply.`,
+                },
+              ],
+            };
+          }
+          const result = await updateMealSitting({
+            existing,
+            date: current,
+            summary: summary?.trim(),
+            note,
+            mealCategoryId,
+            scope,
+            seriesStart,
+          });
+          let tail = "";
+          if (scope === "one" || scope === "future") {
+            tail = result.sittingId
+              ? ` The edited ${scope === "one" ? "occurrence" : "part of the series"} now has sitting ID ${result.sittingId}; the old ID ${sittingId} ${scope === "one" ? "keeps the rest of the series" : "now covers only the earlier dates"}.`
+              : " Skylight did not show the new sitting ID in its reply; look it up with get_meal_sittings.";
+          } else if (seriesStart) {
+            const after = await findSeriesStart(sittingId, current);
+            tail =
+              after === seriesStart
+                ? ` Checked afterwards: the series still starts ${formatDateForDisplay(seriesStart)}.`
+                : ` WARNING: the series start now reads ${after ? formatDateForDisplay(after) : "unknown"}, not ${formatDateForDisplay(seriesStart)}. Check get_meal_sittings for missing earlier occurrences.`;
+          }
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: `Updated ${scope === "all" ? "the whole series" : scope === "future" ? `from ${formatDateForDisplay(current)} onward` : `the ${formatDateForDisplay(current)} occurrence of`} "${was}" (sitting ID: ${sittingId}): ${list.join("; ")}.${tail}`,
+              },
+            ],
+          };
+        }
+
         await updateMealSitting({
           existing,
           date: current,

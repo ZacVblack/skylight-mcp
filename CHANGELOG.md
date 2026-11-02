@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- `update_meal_sitting` can now edit a repeating meal, with a required `scope`: `one` (that date only; Skylight detaches it into its own meal with a new ID), `future` (that date onward; splits the series, new ID from that date) or `all` (the whole series, same ID). Preview first, then `confirm: true`. Repeating meals cannot be moved to another date. For `all`, the series start is derived from the earliest instance and sent as the body date, because Skylight moves the series start to the body date and silently drops earlier occurrences otherwise (verified live); if the start cannot be determined the tool refuses and says to use `future` or the Skylight app. The reply re-reads the start afterwards and warns if it moved.
+- Detached meals (a single week edited with `one`) are refused for edit and delete with a message that says so.
+
 ## [1.8.5] - 2026-11-01
 
 ### Added
