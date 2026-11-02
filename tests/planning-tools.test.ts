@@ -153,6 +153,48 @@ describe("plan_week_meals", () => {
     expect(out).toContain("ingredients added to grocery list");
   });
 
+  it("sets note and instructions after creating, sending the meal's own category and leaving other fields alone", async () => {
+    const patches: Array<{ url: string; body: Record<string, unknown> }> = [];
+    const created: Record<string, unknown> = {};
+    vi.stubGlobal("fetch", vi.fn(async (u: string, i?: RequestInit) => {
+      const url = String(u);
+      const json = (b: unknown) => new Response(JSON.stringify(b), { status: 200, headers: { "content-type": "application/json" } });
+      if (url.includes("/meals/sittings") && i?.method === "POST") {
+        const body = JSON.parse(String(i.body)) as Record<string, unknown>;
+        created.date = body.date;
+        return json({ data: [{ id: "777", type: "meal_sitting", attributes: { summary: body.summary, instances: [body.date], rrule: null, note: "", description: "" } }] });
+      }
+      if (url.includes("/meals/sittings") && i?.method === "PATCH") {
+        patches.push({ url, body: JSON.parse(String(i.body)) as Record<string, unknown> });
+        return json({ data: [] });
+      }
+      if (url.includes("/meals/sittings") && (i?.method ?? "GET") === "GET" && new Headers(i?.headers).get("Skylight-Api-Version") === "2026-10-15") {
+        return json({ data: [{ id: "777", type: "meal_sitting", attributes: { summary: "Baked salmon", instances: ["2026-11-04"], rrule: null, note: "", description: "" }, relationships: { meal_category: { data: { type: "meal_category", id: "12" } }, meal_recipe: { data: null } } }] });
+      }
+      return route(u, i);
+    }));
+    const { text: out } = await text(await handleMcpRequest(call("plan_week_meals", {
+      meals: [{ date: "2026-11-04", summary: "Baked salmon", note: "Keep a plate", description: "https://example.com/r Bake 400F" }],
+    }), props, "t"));
+    expect(out).toContain("Wrote 1 of 1");
+    expect(out).toContain("note set, instructions set");
+    expect(patches).toHaveLength(1);
+    expect(new URL(patches[0]!.url).pathname).toBe("/api/frames/frame-1/meals/sittings/777/instances/2026-11-04");
+    expect(patches[0]!.body).toMatchObject({ note: "Keep a plate", description: "https://example.com/r Bake 400F", summary: "Baked salmon", meal_category_id: "12", rrule: null });
+  });
+
+  it("if attaching text fails the meal still counts as added and the reply says the text is missing", async () => {
+    vi.stubGlobal("fetch", vi.fn(async (u: string, i?: RequestInit) => {
+      if (String(u).includes("/meals/sittings") && i?.method === "PATCH") return new Response("nope", { status: 500 });
+      return route(u, i);
+    }));
+    const { text: out } = await text(await handleMcpRequest(call("plan_week_meals", {
+      meals: [{ date: "2026-11-04", summary: "Fajitas", note: "x" }],
+    }), props, "t"));
+    expect(out).toContain('added "Fajitas"');
+    expect(out).toMatch(/NOTE\/INSTRUCTIONS NOT SET/);
+  });
+
   it("validates before writing: unknown category or empty entry aborts the whole batch", async () => {
     const posts: string[] = [];
     vi.stubGlobal("fetch", vi.fn(async (u: string, i?: RequestInit) => { if (i?.method === "POST") posts.push(String(u)); return route(u, i); }));

@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.8.9] - 2026-11-02
+
+### Added
+- `plan_week_meals` entries take `note` (500 characters) and `description` (the app's "Instructions or ingredients" field, 2000 characters), so a whole week can be planned with its text in one call. Each is attached with a second request per meal, the same PATCH `update_meal_sitting` uses; if that step fails the reply says the meal was added without its text. A dry run shows which meals would carry a note or instructions. Slots that already have a meal are still skipped, never overwritten.
+
 ## [1.8.8] - 2026-11-02
 
 ### Added

@@ -19,11 +19,13 @@ import { getListWithItems, getLists } from "../api/endpoints/lists.js";
 import {
   addRecipeToGroceryList,
   createMealSitting,
+  findMealSitting,
   getMealCategories,
   getMealSittings,
   mealCategoryName,
   type MealCategoryResource,
   type MealSittingResource,
+  updateMealSitting,
 } from "../api/endpoints/meals.js";
 import { getConfig } from "../config.js";
 import { getTodayDate, parseDate } from "../utils/dates.js";
@@ -247,7 +249,10 @@ Use for "when could we do X this week?" questions.`,
 Each entry names a date, a meal (category name like "Dinner", default Dinner), and either a free-text summary ("Thai green curry") or a saved recipeId. A slot that already has a meal is skipped and reported, never overwritten. Use dryRun first to see what would change.
 
 Parameters:
-- meals: list of { date, meal?, summary?, recipeId? }
+- meals: list of { date, meal?, summary?, recipeId?, note?, description? }
+  - note: family notes shown on the meal (500 characters max)
+  - description: the app's "Instructions or ingredients" field (2000 characters max)
+  note and description are written with a second request per meal after it is created; if that second step fails the reply says the meal was added but its note or instructions were not.
 - dryRun: report the plan without writing. Default false.
 - addRecipesToGroceryList: for entries with a recipeId, also push that recipe's ingredients to the grocery list. Default false.`,
     {
@@ -258,6 +263,8 @@ Parameters:
             meal: z.string().optional().describe("Category name, e.g. Dinner (default), Lunch, Breakfast, Snack"),
             summary: z.string().max(200).optional().describe("Free-text meal name"),
             recipeId: z.string().optional().describe("Saved recipe ID"),
+            note: z.string().max(500).optional().describe("Family notes for the meal"),
+            description: z.string().max(2000).optional().describe("Instructions or ingredients text"),
           })
         )
         .min(1)
@@ -272,7 +279,7 @@ Parameters:
         const byName = new Map(categories.map((c) => [mealCategoryName(c).toLowerCase(), c]));
 
         // Resolve and validate everything before writing anything.
-        const resolved: Array<{ date: string; category: MealCategoryResource; summary?: string; recipeId?: string; label: string }> = [];
+        const resolved: Array<{ date: string; category: MealCategoryResource; summary?: string; recipeId?: string; note?: string; description?: string; label: string }> = [];
         const problems: string[] = [];
         for (const m of meals) {
           const date = parseDate(m.date, tz);
@@ -285,7 +292,15 @@ Parameters:
             problems.push(`${m.date} ${mealCategoryName(category)}: give a summary or a recipeId`);
             continue;
           }
-          resolved.push({ date, category, summary: m.summary?.trim() || undefined, recipeId: m.recipeId, label: m.summary?.trim() || `recipe ${m.recipeId}` });
+          resolved.push({
+            date,
+            category,
+            summary: m.summary?.trim() || undefined,
+            recipeId: m.recipeId,
+            note: m.note?.trim() || undefined,
+            description: m.description?.trim() || undefined,
+            label: m.summary?.trim() || `recipe ${m.recipeId}`,
+          });
         }
         if (problems.length) return text(`Nothing written. Fix these first:\n- ${problems.join("\n- ")}`, true);
 
@@ -303,7 +318,8 @@ Parameters:
             continue;
           }
           if (dryRun) {
-            lines.push(`- ${formatDay(r.date)} ${mealCategoryName(r.category)}: would add "${r.label}"`);
+            const withText = [r.note ? "note" : "", r.description ? "instructions" : ""].filter(Boolean).join(" and ");
+            lines.push(`- ${formatDay(r.date)} ${mealCategoryName(r.category)}: would add "${r.label}"${withText ? ` with ${withText}` : ""}`);
             continue;
           }
           try {
@@ -317,6 +333,16 @@ Parameters:
                 extra = ", ingredients added to grocery list";
               } catch (e) {
                 extra = `, grocery push failed: ${e instanceof Error ? e.message : String(e)}`;
+              }
+            }
+            if (r.note || r.description) {
+              try {
+                const created = await findMealSitting(sitting.id, r.date);
+                if (!created) throw new Error("the new meal was not found to attach text to");
+                await updateMealSitting({ existing: created, date: r.date, note: r.note, description: r.description, mealCategoryId: r.category.id });
+                extra += `${r.note ? ", note set" : ""}${r.description ? ", instructions set" : ""}`;
+              } catch (e) {
+                extra += `, NOTE/INSTRUCTIONS NOT SET (meal was added): ${e instanceof Error ? e.message : String(e)}`;
               }
             }
             lines.push(`- ${formatDay(r.date)} ${mealCategoryName(r.category)}: added "${r.label}" [sitting ID: ${sitting.id}]${extra}`);
