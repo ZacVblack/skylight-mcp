@@ -7,8 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.8.5] - 2026-11-01
+
 ### Added
-- `create_meal_sitting` takes `repeat: "weekly"`: the meal repeats every week on the weekday of `date`, with no end. Weekly only; other rules were not captured. Sends the web app's whole create form (not yet verified live from this code path).
+- `create_meal_sitting` takes `repeat: "weekly"`: the meal repeats every week on the weekday of `date`, with no end. Weekly only; other rules were not captured. Sends the web app's whole create form; verified live (create, then delete with each scope).
 - `delete_meal_sitting` can now delete from a repeating meal, with `scope`: `one` (default, that date only), `future` (that date and every later one; earlier ones are kept) or `all` (the whole series, past dates included). Sent as `apply_to`, like `delete_chore`. Previews name the exact effect and the `all` preview says it removes the entire series. Success is confirmed from Skylight's response, not assumed.
 
 ### Changed
