@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- `update_meal_sitting` can set `description`, the app's "Instructions or ingredients" field (recipe link, steps), separately from `note`. Each is preserved when only the other is changed. The 2000-character cap is ours; Skylight's own limit is not confirmed.
+- `get_meal_sittings` takes `details: true` to print each meal's note and instructions, so a write can be read back. Off by default because they can be long.
+
+### Fixed
+- A weekday name ("friday") was resolved from the machine's clock, then offset in the configured timezone. The hosted Worker runs in UTC, so after 4pm Pacific "friday" could land a day early; `plan_week_meals` and every other tool taking a weekday were exposed. The weekday is now taken from today's date in the configured timezone.
+
 ## [1.8.7] - 2026-11-02
 
 ### Fixed

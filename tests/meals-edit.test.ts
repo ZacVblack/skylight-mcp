@@ -106,6 +106,30 @@ describe("update_meal_sitting", () => {
     expect(seen.every((s) => s.version === "2026-10-15")).toBe(true);
   });
 
+  it("sets the instructions field without touching the note, and the note without touching the instructions", async () => {
+    const withBoth = { ...oneOff, attributes: { ...oneOff.attributes, note: "family note", description: "old steps" } };
+    const seen = stub([withBoth]);
+    await read(await hosted("update_meal_sitting", { sittingId: "5001", date: "2026-11-03", description: "Recipe: https://example.com/r" }));
+    let body = seen.find((s) => s.method === "PATCH")!.body as { note: string; description: string };
+    expect(body.description).toBe("Recipe: https://example.com/r");
+    expect(body.note).toBe("family note");
+    seen.length = 0;
+    await read(await hosted("update_meal_sitting", { sittingId: "5001", date: "2026-11-03", note: "new note" }));
+    body = seen.find((s) => s.method === "PATCH")!.body as { note: string; description: string };
+    expect(body.note).toBe("new note");
+    expect(body.description).toBe("old steps");
+  });
+
+  it("get_meal_sittings prints note and instructions only when asked", async () => {
+    const withBoth = { ...oneOff, attributes: { ...oneOff.attributes, note: "family note", description: "the steps" } };
+    stub([withBoth]);
+    const plain = await read(await hosted("get_meal_sittings", { date: "2026-11-03", dateEnd: "2026-11-03" }));
+    expect(plain.text).not.toMatch(/family note|the steps/);
+    const detailed = await read(await hosted("get_meal_sittings", { date: "2026-11-03", dateEnd: "2026-11-03", details: true }));
+    expect(detailed.text).toMatch(/instructions: the steps/);
+    expect(detailed.text).toMatch(/note: family note/);
+  });
+
   it("a date move keeps the OLD date in the path and puts the new date in the body", async () => {
     const seen = stub([oneOff]);
     await read(await hosted("update_meal_sitting", { sittingId: "5001", date: "2026-11-03", newDate: "2026-11-04" }));

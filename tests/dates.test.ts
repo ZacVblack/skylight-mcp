@@ -140,3 +140,21 @@ describe("dates", () => {
     });
   });
 });
+
+describe("weekday names resolve in the configured timezone, not the machine's", () => {
+  afterEach(() => vi.useRealTimers());
+
+  it("5pm Monday Pacific is already Tuesday in UTC, but 'friday' is still 4 days away", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-11-03T01:00:00Z")); // Mon 2026-11-02 17:00 PST
+    expect(getTodayDate("America/Los_Angeles")).toBe("2026-11-02");
+    expect(parseDate("friday", "America/Los_Angeles")).toBe("2026-11-06");
+    expect(parseDate("monday", "America/Los_Angeles")).toBe("2026-11-09"); // today is Monday: next one
+  });
+
+  it("a timezone ahead of UTC is also right early in its day", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-11-01T20:00:00Z")); // Mon 2026-11-02 09:00 in Sydney, still Sunday in UTC
+    expect(parseDate("tuesday", "Australia/Sydney")).toBe("2026-11-03");
+  });
+});

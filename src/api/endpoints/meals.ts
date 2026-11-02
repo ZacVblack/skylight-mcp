@@ -401,6 +401,8 @@ export interface UpdateMealSittingOptions {
   newDate?: string;
   summary?: string;
   note?: string;
+  /** The "Instructions or ingredients" field in the app. */
+  description?: string;
   mealCategoryId?: string;
   /** Required for a repeating meal: which occurrences the change applies to. */
   scope?: MealEditScope;
@@ -451,7 +453,7 @@ export async function updateMealSitting(options: UpdateMealSittingOptions): Prom
     note: options.note ?? (typeof a.note === "string" ? a.note : ""),
     rrule: kind === "series" ? a.rrule : null,
     summary: options.summary ?? a.summary ?? "",
-    description: typeof a.description === "string" ? a.description : "",
+    description: options.description ?? (typeof a.description === "string" ? a.description : ""),
     meal_category_id: options.mealCategoryId ?? existing.relationships?.meal_category?.data?.id ?? null,
     meal_recipe_id: existing.relationships?.meal_recipe?.data?.id ?? null,
     profile_ids: ((existing.relationships as { profiles?: { data?: Array<{ id: string }> } } | undefined)?.profiles?.data ?? []).map(

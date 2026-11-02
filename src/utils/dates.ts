@@ -47,8 +47,10 @@ export function parseDate(input: string, timezone?: string): string {
   const days = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
   const dayIndex = days.indexOf(lower);
   if (dayIndex !== -1) {
-    const today = new Date();
-    const todayDay = today.getDay();
+    // Weekday of today in the CONFIGURED timezone. The machine's own clock is wrong
+    // for this: the hosted Worker runs in UTC, which is already "tomorrow" after 4pm Pacific.
+    const [ty, tm, td] = getTodayDate(timezone).split("-").map(Number);
+    const todayDay = new Date(Date.UTC(ty, tm - 1, td)).getUTCDay();
     let daysUntil = dayIndex - todayDay;
     if (daysUntil <= 0) {
       daysUntil += 7; // Next week if today or past
