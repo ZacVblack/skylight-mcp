@@ -45,7 +45,28 @@ liveSuite("repeating meal edit probe (apply_to=all)", { tags: ["write", "meals"]
     expect(await has(2)).toBe(true);
   });
 
-  it("edit all, addressed at week 2, body date = original start (week 0)", async () => {
+  it("series start date: what does attributes.date hold when read at a later week?", async () => {
+    if (!id) return;
+    const client = ctx.client();
+    const readAt = async (n: number): Promise<unknown> => {
+      const at = week(n);
+      const r = await client.request<{ data?: Array<{ id: string; attributes: Record<string, unknown> }> }>(
+        "/api/frames/{frameId}/meals/sittings",
+        {
+          method: "GET",
+          params: { date_min: at, date_max: ctx.daysFromToday(100 + 7 * n + 1), include: "meal_category,meal_recipe,profiles" },
+          apiVersion: "2026-10-15",
+        }
+      );
+      return (r.data ?? []).find((x) => x.id === id)?.attributes.date;
+    };
+    const d0 = await readAt(0);
+    const d2 = await readAt(2);
+    ctx.note(`attributes.date read at week 0 = ${String(d0)} (week 0 is ${week(0)}); read at week 2 = ${String(d2)} (week 2 is ${week(2)})`);
+    expect(d2, "attributes.date read at week 2 is the series start, not the occurrence date").toBe(week(0));
+  });
+
+  it("edit all, addressed at week 2, body date = attributes.date read at week 2", async () => {
     if (!id) return;
     const client = ctx.client();
     const at = week(2);
@@ -63,7 +84,7 @@ liveSuite("repeating meal edit probe (apply_to=all)", { tags: ["write", "meals"]
       return d && !Array.isArray(d) ? d.id : null;
     };
     const body = {
-      date: week(0),
+      date: typeof a.date === "string" ? a.date : week(0),
       note: typeof a.note === "string" ? a.note : "",
       rrule: a.rrule ?? null,
       summary: renamed,
@@ -73,7 +94,7 @@ liveSuite("repeating meal edit probe (apply_to=all)", { tags: ["write", "meals"]
       profile_ids: [] as string[],
       saveToRecipeBox: false,
     };
-    ctx.note(`sent rrule present: ${body.rrule ? "yes" : "NO"}; body date offset from week 0: 0 days; addressed at week 2`);
+    ctx.note(`sent rrule present: ${body.rrule ? "yes" : "NO"}; body date from attributes.date, equals week 0: ${a.date === week(0) ? "yes" : "NO"}; addressed at week 2`);
     const res = await client.request<{ data?: Array<{ id: string; attributes: Record<string, unknown> }> }>(
       `/api/frames/{frameId}/meals/sittings/${id}/instances/${at}`,
       { method: "PATCH", body, params: { ...query, apply_to: "all" }, apiVersion: "2026-10-15" }
