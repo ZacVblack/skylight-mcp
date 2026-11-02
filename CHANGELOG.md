@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.8.8] - 2026-11-02
+
 ### Added
 - `update_meal_sitting` can set `description`, the app's "Instructions or ingredients" field (recipe link, steps), separately from `note`. Each is preserved when only the other is changed. The 2000-character cap is ours; Skylight's own limit is not confirmed.
 - `get_meal_sittings` takes `details: true` to print each meal's note and instructions, so a write can be read back. Off by default because they can be long.
