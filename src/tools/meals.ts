@@ -15,6 +15,8 @@ import {
   findMealSitting,
   updateMealSitting,
   deleteMealSitting,
+  mealKind,
+  type MealDeleteScope,
 } from "../api/endpoints/meals.js";
 import { parseDate, formatDateForDisplay, getTodayDate, getDateOffset } from "../utils/dates.js";
 import { addDays } from "../utils/schedule.js";
@@ -379,6 +381,7 @@ Parameters:
 - mealCategoryId (required): Meal category ID (use get_meal_categories to find "Dinner" etc.)
 - summary: What the meal is, as free text, e.g. "Thai green curry". No recipe needed.
 - recipeId: A saved recipe to link instead of, or as well as, a summary.
+- repeat: "weekly" makes it repeat every week on the same weekday as date, with no end.
 
 Give at least one of summary or recipeId.
 
@@ -388,8 +391,9 @@ Returns: The created meal sitting.`,
       mealCategoryId: z.string().describe("Meal category ID (e.g., ID for 'Dinner')"),
       summary: z.string().max(200).optional().describe("Meal name as free text, e.g. 'Sheet-pan fajitas'"),
       recipeId: z.string().optional().describe("Saved recipe ID to link"),
+      repeat: z.enum(["weekly"]).optional().describe("Repeat every week on date's weekday, no end date"),
     },
-    async ({ date, mealCategoryId, summary, recipeId }) => {
+    async ({ date, mealCategoryId, summary, recipeId, repeat }) => {
       try {
         if (!summary?.trim() && !recipeId) {
           return {
@@ -405,6 +409,7 @@ Returns: The created meal sitting.`,
           mealCategoryId,
           summary: summary?.trim() || undefined,
           recipeId,
+          repeat,
         });
 
         const what = sitting.attributes.summary?.trim() || summary?.trim() || `recipe ${recipeId}`;
@@ -412,7 +417,7 @@ Returns: The created meal sitting.`,
           content: [
             {
               type: "text" as const,
-              text: `Scheduled "${what}" for ${formatDateForDisplay(mealDate)} (sitting ID: ${sitting.id})`,
+              text: `Scheduled "${what}" for ${formatDateForDisplay(mealDate)}${repeat ? ", repeating weekly" : ""} (sitting ID: ${sitting.id})`,
             },
           ],
         };
@@ -520,17 +525,19 @@ Use this when:
 Parameters:
 - sittingId (required): from get_meal_sittings
 - date (required): the meal's date (YYYY-MM-DD)
-- confirm: must be true to delete. Without it nothing is deleted and the meal that would be removed is shown.
+- scope: for a repeating meal only. "one" (default) removes just that date; "future" removes that date and every later one, keeping earlier ones; "all" removes the whole series, past dates included.
+- confirm: must be true to delete. Without it nothing is deleted and what would be removed is shown.
 
-Only one-off meals can be deleted here; repeating meals must be handled in the Skylight app.
+A meal that was edited on its own after being part of a series cannot be deleted here; use the Skylight app.
 
 Returns: Confirmation that Skylight removed the meal.`,
     {
       sittingId: z.string().describe("Sitting ID from get_meal_sittings"),
       date: z.string().describe("The meal's date (YYYY-MM-DD)"),
+      scope: z.enum(["one", "future", "all"]).optional().describe("Repeating meals only: one (default), future, or all"),
       confirm: z.boolean().optional().describe("Set true to actually delete. Default: preview only."),
     },
-    async ({ sittingId, date, confirm }) => {
+    async ({ sittingId, date, scope, confirm }) => {
       try {
         const config = getConfig();
         const day = parseDate(date, config.timezone);
@@ -547,23 +554,44 @@ Returns: Confirmation that Skylight removed the meal.`,
           };
         }
         const what = existing.attributes.summary?.trim() || "(no name)";
+        const kind = mealKind(existing);
+        if (kind === "detached") {
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: `"${what}" on ${formatDateForDisplay(day)} was edited on its own and is detached from its series. It cannot be deleted here; use the Skylight app. Nothing deleted.`,
+              },
+            ],
+            isError: true,
+          };
+        }
+        const chosen: MealDeleteScope = scope ?? "one";
+        const effect =
+          kind === "one-off"
+            ? `permanently delete "${what}" on ${formatDateForDisplay(day)}`
+            : chosen === "one"
+              ? `permanently delete only the ${formatDateForDisplay(day)} occurrence of the repeating meal "${what}"; the series continues`
+              : chosen === "future"
+                ? `permanently delete "${what}" on ${formatDateForDisplay(day)} and every later occurrence; earlier occurrences are kept`
+                : `permanently delete the ENTIRE repeating series "${what}", every occurrence including past ones`;
         if (confirm !== true) {
           return {
             content: [
               {
                 type: "text" as const,
-                text: `NOT DELETED. This would permanently delete "${what}" on ${formatDateForDisplay(day)} (sitting ID: ${sittingId}). Call again with confirm: true to proceed.`,
+                text: `NOT DELETED. This would ${effect} (sitting ID: ${sittingId}). Call again with confirm: true to proceed.`,
               },
             ],
           };
         }
-        const removed = await deleteMealSitting(existing, day);
+        const removed = await deleteMealSitting(existing, day, chosen);
         return {
           content: [
             {
               type: "text" as const,
               text: removed
-                ? `Deleted "${what}" on ${formatDateForDisplay(day)} (sitting ID: ${sittingId}).`
+                ? `Deleted ${kind === "one-off" ? `"${what}" on ${formatDateForDisplay(day)}` : chosen === "all" ? `the whole series "${what}"` : chosen === "future" ? `"${what}" from ${formatDateForDisplay(day)} onward` : `the ${formatDateForDisplay(day)} occurrence of "${what}"`} (sitting ID: ${sittingId}).`
                 : `Skylight accepted the request but did not confirm the removal of sitting ${sittingId}. Check get_meal_sittings.`,
             },
           ],

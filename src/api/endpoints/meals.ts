@@ -216,6 +216,22 @@ export interface CreateMealSittingOptions {
   /** Free-text meal name. Either this or recipeId should be given. */
   summary?: string;
   recipeId?: string;
+  /** Repeat weekly on the weekday of `date`. Only this shape was captured. */
+  repeat?: "weekly";
+}
+
+const WEEKDAY_CODES = ["SU", "MO", "TU", "WE", "TH", "FR", "SA"] as const;
+
+/** Weekday code (SU..SA) of a YYYY-MM-DD date, independent of time zone. */
+export function weekdayCode(date: string): string {
+  assertIsoDate(date);
+  const [y, m, d] = date.split("-").map(Number) as [number, number, number];
+  return WEEKDAY_CODES[new Date(Date.UTC(y, m - 1, d)).getUTCDay()]!;
+}
+
+/** The rule the web app sends for "repeats every 1 week on <weekday>". */
+export function weeklyRrule(date: string): string {
+  return `FREQ=WEEKLY;INTERVAL=1;WKST=SU;BYDAY=${weekdayCode(date)}`;
 }
 
 /**
@@ -234,6 +250,30 @@ export async function createMealSitting(
   }
   if (options.recipeId) {
     body.meal_recipe_id = options.recipeId;
+  }
+
+  if (options.repeat === "weekly") {
+    // A repeating create sends the web app's whole form (captured 2026-11-01).
+    // Not verified live from this code path: the body shape and API version.
+    const form = {
+      date: options.date,
+      summary: options.summary ?? "",
+      description: "",
+      note: "",
+      meal_category_id: options.mealCategoryId,
+      meal_recipe_id: options.recipeId ?? null,
+      profile_ids: [] as string[],
+      rrule: weeklyRrule(options.date),
+      add_to_grocery_list: false,
+      saveToRecipeBox: false,
+    };
+    const created = await client.request<{ data: MealSittingResource | MealSittingResource[] }>(
+      "/api/frames/{frameId}/meals/sittings",
+      { method: "POST", body: form, apiVersion: MEAL_EDIT_API_VERSION }
+    );
+    const first = Array.isArray(created.data) ? created.data[0] : created.data;
+    if (!first) throw new Error("Skylight returned an empty response when creating the repeating meal");
+    return first;
   }
 
   // The API answers a create with a list envelope (one element), unlike GET by id.
@@ -294,15 +334,30 @@ export async function findMealSitting(sittingId: string, date: string): Promise<
   return (response.data ?? []).find((s) => s.id === sittingId && s.attributes.instances?.includes(date)) ?? null;
 }
 
-/** Only one-off sittings were captured. Repeating ones are edited in the app. */
-function assertOneOff(sitting: MealSittingResource): void {
+export type MealKind = "one-off" | "series" | "detached";
+
+/**
+ * one-off: not repeating. series: carries an rrule. detached: an occurrence
+ * that was edited on its own; it has no rrule but still reports
+ * `recurring: true` (captured 2026-11-01).
+ */
+export function mealKind(sitting: MealSittingResource): MealKind {
   const a = sitting.attributes;
-  if (a.recurring === true || a.rrule) {
+  if (a.rrule) return "series";
+  if (a.recurring === true) return "detached";
+  return "one-off";
+}
+
+/** Editing repeating meals is not supported yet; only one-offs are edited here. */
+function assertOneOff(sitting: MealSittingResource): void {
+  if (mealKind(sitting) !== "one-off") {
     throw new Error(
-      "This meal repeats. Editing or deleting one occurrence of a repeating meal is not supported here; use the Skylight app."
+      "This meal repeats. Editing an occurrence of a repeating meal is not supported here; use the Skylight app."
     );
   }
 }
+
+export type MealDeleteScope = "one" | "future" | "all";
 
 export interface UpdateMealSittingOptions {
   existing: MealSittingResource;
@@ -346,16 +401,34 @@ export async function updateMealSitting(options: UpdateMealSittingOptions): Prom
 }
 
 /**
- * Delete a one-off sitting: DELETE /meals/sittings/{id}/instances/{date}, no
- * body. Returns whether Skylight confirmed the removal in meta.deleted_sitting_ids.
+ * Delete a sitting: DELETE /meals/sittings/{id}/instances/{date}, no body.
+ * A one-off sends no scope. A repeating series sends `apply_to` (captured
+ * 2026-11-01): `one` excludes that date, `future` ends the series before it,
+ * `all` removes the whole series. A detached occurrence is refused.
+ * Returns whether Skylight's response confirms the removal.
  */
-export async function deleteMealSitting(existing: MealSittingResource, date: string): Promise<boolean> {
-  assertOneOff(existing);
+export async function deleteMealSitting(
+  existing: MealSittingResource,
+  date: string,
+  scope: MealDeleteScope = "one"
+): Promise<boolean> {
   assertIsoDate(date);
   const id = assertSittingId(existing.id);
+  const kind = mealKind(existing);
+  if (kind === "detached") {
+    throw new Error(
+      "This occurrence was edited on its own and is detached from its series. Deleting it is not supported here; use the Skylight app."
+    );
+  }
+  const params = instanceQuery(date);
+  if (kind === "series") params.apply_to = scope;
   const response = await getClient().request<SittingEnvelope>(
     `/api/frames/{frameId}/meals/sittings/${id}/instances/${date}`,
-    { method: "DELETE", params: instanceQuery(date), apiVersion: MEAL_EDIT_API_VERSION }
+    { method: "DELETE", params, apiVersion: MEAL_EDIT_API_VERSION }
   );
-  return (response?.meta?.deleted_sitting_ids ?? []).map(String).includes(id);
+  const deleted = (response?.meta?.deleted_sitting_ids ?? []).map(String).includes(id);
+  if (kind === "one-off" || scope === "all") return deleted;
+  // one / future leave the series in place: it is returned without the date.
+  const left = (response.data ?? []).find((s) => s.id === id);
+  return !!left && !(left.attributes.instances ?? []).includes(date);
 }

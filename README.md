@@ -384,7 +384,7 @@ last captured are recorded in the repository's build log.
 Nothing here is hidden behind a flag. It is either unavailable from Skylight or not yet captured.
 
 - **Messages**: sending to specific devices, scheduling, repeating, voice notes, and read-aloud (the option exists on `send_message` but was not tested live). Deleting works but the app has no delete button.
-- **Meals**: editing or deleting a repeating meal (it is refused, because the behaviour of changing one occurrence of a series was not captured), saving a meal to the recipe box from the edit form, and Skylight's own "Plan Meals" feature.
+- **Meals**: editing a repeating meal (refused), repeat rules other than weekly, deleting a meal that was edited on its own after being in a series (refused), saving a meal to the recipe box from the edit form, and Skylight's own "Plan Meals" feature.
 - **Task box**: editing or completing tasks, and saving a routine template to it.
 - **Chores**: completing a one-off (non-recurring) chore, Skip, daily or monthly routine schedules (only the weekly format has been captured), and editing a recurring chore's date, time, assignee or stars. Un-completing a routine cannot reduce its `longest_streak`. Whether "this and future" from a later day keeps the earlier days has not been checked (the capture started from the first day).
 - **Profiles**: creating or editing them. Read-only.
@@ -489,9 +489,9 @@ Meals and recipes need Skylight Plus.
 |------|--------|-------------|
 | `get_meal_categories` | read | Breakfast, Lunch, Dinner, Snack and their IDs |
 | `get_meal_sittings` | read | Scheduled meals in a date range, with sitting IDs |
-| `create_meal_sitting` | write | Schedule a meal on a date (free text or a saved recipe) |
+| `create_meal_sitting` | write | Schedule a meal on a date (free text or a saved recipe). `repeat: "weekly"` repeats it every week on that weekday. |
 | `update_meal_sitting` | write | Rename, re-categorise, add a note to, or move a one-off meal, by sitting ID and its current date. Repeating meals are refused. |
-| `delete_meal_sitting` | destructive | Delete a one-off meal. Local server only. Previews unless `confirm: true`; reports success only when Skylight confirms the removal. |
+| `delete_meal_sitting` | destructive | Delete a meal. For a repeating meal, `scope` is `one` (default), `future` or `all` (whole series). Previews unless `confirm: true`; reports success only when Skylight confirms the removal. A meal edited on its own after being in a series is refused. |
 | `get_recipes` / `get_recipe` | read | Browse saved recipes |
 | `create_recipe` / `update_recipe` | write | Add or change a recipe |
 | `delete_recipe` | destructive | Delete a recipe. Local server only. |
