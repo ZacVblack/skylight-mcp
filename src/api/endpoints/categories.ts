@@ -1,28 +1,23 @@
 import { getClient } from "../client.js";
+import { cachedLookup, clearLookupCache } from "../lookup-cache.js";
 import type { CategoriesResponse, CategoryResource } from "../types.js";
-
-// Cache for categories (family members)
-let categoriesCache: CategoryResource[] | null = null;
 
 /**
  * Get all categories (family members/profiles)
  */
 export async function getCategories(useCache = true): Promise<CategoryResource[]> {
-  if (useCache && categoriesCache) {
-    return categoriesCache;
-  }
-
-  const client = getClient();
-  const response = await client.get<CategoriesResponse>("/api/frames/{frameId}/categories");
-  categoriesCache = response.data;
-  return response.data;
+  return cachedLookup(
+    "categories",
+    async () => (await getClient().get<CategoriesResponse>("/api/frames/{frameId}/categories")).data,
+    !useCache
+  );
 }
 
 /**
  * Clear the categories cache
  */
 export function clearCategoriesCache(): void {
-  categoriesCache = null;
+  clearLookupCache();
 }
 
 /**
@@ -49,9 +44,14 @@ export async function getChoreChartCategories(): Promise<CategoryResource[]> {
 export async function resolveProfileIds(names: string[]): Promise<{ ids: string[]; labels: string[] }> {
   const wanted = [...new Set(names.map((n) => n.trim()).filter(Boolean))];
   if (wanted.length === 0) throw new Error("Give at least one profile name.");
-  const all = await getCategories();
-  const linked = all.filter((c) => c.attributes.linked_to_profile);
-  const pool = linked.length > 0 ? linked : all;
+  const poolOf = (all: CategoryResource[]): CategoryResource[] => {
+    const linked = all.filter((c) => c.attributes.linked_to_profile);
+    return linked.length > 0 ? linked : all;
+  };
+  let pool = poolOf(await getCategories());
+  // A profile added since the list was cached must not be rejected as unknown: look once more, fresh.
+  const unknown = (): boolean => wanted.some((n) => !pool.some((c) => c.attributes.label?.toLowerCase() === n.toLowerCase()));
+  if (unknown()) pool = poolOf(await getCategories(false));
   const ids: string[] = [];
   const labels: string[] = [];
   for (const name of wanted) {

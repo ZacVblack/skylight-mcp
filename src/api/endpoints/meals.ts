@@ -1,4 +1,5 @@
 import { getClient } from "../client.js";
+import { cachedLookup } from "../lookup-cache.js";
 import { addDays } from "../../utils/schedule.js";
 
 // Meal types
@@ -80,11 +81,10 @@ interface MealSittingsResponse {
  * Get meal categories (Breakfast, Lunch, Dinner, etc.)
  */
 export async function getMealCategories(): Promise<MealCategoryResource[]> {
-  const client = getClient();
-  const response = await client.get<MealCategoriesResponse>(
-    "/api/frames/{frameId}/meals/categories"
+  return cachedLookup(
+    "meal-categories",
+    async () => (await getClient().get<MealCategoriesResponse>("/api/frames/{frameId}/meals/categories")).data
   );
-  return response.data;
 }
 
 export interface GetRecipesOptions {
