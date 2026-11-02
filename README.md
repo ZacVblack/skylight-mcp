@@ -340,6 +340,9 @@ Claude opens the consent page. Enter the setup passphrase, your frame ID and
 timezone, then follow the two-step Skylight sign-in and paste the redirect
 URL. Connectors are shared across your Claude account, so Duet sees it too.
 
+The server also serves `/setup` (these steps, for the host it runs on) and
+`/version` (just the version number, handy for confirming a redeploy took).
+
 ### What is stored where
 
 | Thing | Where | Protection |
@@ -580,6 +583,10 @@ deleting a file. See [tests/live/README.md](tests/live/README.md).
 SKYLIGHT_FRAME_ID=your_frame_id SKYLIGHT_TIMEZONE=America/Los_Angeles \
 SKYLIGHT_LIVE=1 npm run test:live
 ```
+
+Each new terminal starts without these variables; if one is missing the suite
+says which and prints the full command. To keep them, add the `export` lines to
+`~/.zshrc` (or `~/.bashrc`). On Windows PowerShell use `setx` and open a new window.
 
 Set `SKYLIGHT_TIMEZONE` to your frame's zone. It defaults to `America/New_York`,
 which shifts every date window the suite asks for if your frame is elsewhere.

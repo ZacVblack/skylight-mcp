@@ -126,6 +126,17 @@ export async function runDoctor(args: readonly string[], overrides: Partial<Doct
 
   const mark = { ok: "[ok]  ", warn: "[warn]", fail: "[FAIL]" } as const;
   for (const r of results) deps.out(`${mark[r.level]} ${r.text}`);
+  if (!frame || !tz) {
+    deps.out(
+      [
+        "",
+        "Set them in this terminal (placeholders: use your own values). Your MCP client's config is separate; it needs them too.",
+        "  macOS / Linux:  export SKYLIGHT_FRAME_ID=your_frame_id SKYLIGHT_TIMEZONE=America/New_York",
+        "  PowerShell:     $env:SKYLIGHT_FRAME_ID=\"your_frame_id\"; $env:SKYLIGHT_TIMEZONE=\"America/New_York\"",
+        "  Keep them:      PowerShell `setx SKYLIGHT_FRAME_ID your_frame_id`, then open a NEW window. A new terminal on macOS/Linux starts empty unless you add the exports to ~/.zshrc or ~/.bashrc.",
+      ].join("\n")
+    );
+  }
   const failed = results.filter((r) => r.level === "fail").length;
   deps.out(failed === 0 ? "\nNo blocking problems found." : `\n${failed} problem${failed === 1 ? "" : "s"} to fix.`);
   return failed === 0 ? 0 : 1;

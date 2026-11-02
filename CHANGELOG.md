@@ -10,6 +10,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - The profile list was cached process-wide, never expired, and was not tied to a frame. On the hosted Worker a second user's request in the same process could be served the first user's profile names; locally a profile added in Skylight did not appear until a restart. Lookups are now scoped to the current request's client (nothing crosses users or frames on the Worker), expire after 5 minutes locally, and an unknown profile name triggers one fresh look before it is rejected.
 
+### Added
+- Hosted Worker: `GET /version` returns the version and nothing else, so a deploy can be confirmed without counting tools. `GET /setup` is an instructions-only page (connector address for the host it is served from, what to have ready, the steps); the landing page links to it.
+- `doctor` prints macOS/Linux and PowerShell forms for setting `SKYLIGHT_FRAME_ID` and `SKYLIGHT_TIMEZONE` when either is missing, and says the MCP client's config is separate from the terminal.
+- Live test harness: names every missing variable (`SKYLIGHT_LIVE`, `SKYLIGHT_FRAME_ID`, `SKYLIGHT_TIMEZONE`) and prints the full command with placeholders, instead of failing on the first one.
+
 ### Changed
 - Meal categories are looked up once per request (or per 5 minutes locally) instead of on every meal call.
 

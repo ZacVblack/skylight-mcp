@@ -88,7 +88,38 @@ export function landingPage(): Response {
   return html(
     page(
       "Skylight MCP",
-      `<h1>Skylight MCP</h1><p>A remote MCP server for a Skylight Calendar. Add <code>${"/mcp"}</code> on this host as a custom connector in Claude; it will walk you through signing in.</p>`
+      `<h1>Skylight MCP</h1><p>A remote MCP server for a Skylight Calendar. Add <code>${"/mcp"}</code> on this host as a custom connector in Claude; it will walk you through signing in. <a href="/setup">Setup steps</a>.</p>`
     )
   );
+}
+
+/** Instructions only: no secrets, no actions. The origin comes from the request and is escaped. */
+export function setupPage(origin: string, timezone: string): Response {
+  const connector = escape(`${origin}/mcp`);
+  return html(
+    page(
+      "Set up Skylight MCP",
+      `<h1>Connect Claude to your Skylight</h1>
+<p>Have these ready:</p>
+<ul>
+  <li><strong>Setup passphrase</strong>: set by whoever deployed this server.</li>
+  <li><strong>Skylight frame ID</strong>: after you sign in at ourskylight.com the address bar shows <code>/my-skylight/&lt;number&gt;</code>. That number.</li>
+  <li><strong>Timezone</strong>: an IANA name such as <code>${escape(timezone)}</code>.</li>
+</ul>
+<ol>
+  <li>In Claude (or Duet) go to Settings, then Connectors, then Add custom connector.</li>
+  <li>Use this address: <code>${connector}</code></li>
+  <li>Approve the connection, enter the passphrase, frame ID and timezone, then sign in to Skylight. The next page explains how to copy the redirect address back from your browser history.</li>
+  <li>Ask Claude: <em>what is on the family calendar this week?</em></li>
+</ol>
+<p class="hint">Connectors are shared across your Claude account, so Duet sees it too. After an update, new parameters may only show up in a new chat. This server's version is at <a href="/version">/version</a>.</p>`
+    )
+  );
+}
+
+/** Version only, so a deploy can be confirmed without counting tools. Nothing else is exposed. */
+export function versionResponse(version: string): Response {
+  return new Response(JSON.stringify({ name: "skylight-mcp", version }), {
+    headers: { "Content-Type": "application/json", "Cache-Control": "no-store" },
+  });
 }
