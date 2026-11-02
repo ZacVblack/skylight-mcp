@@ -32,14 +32,33 @@ export interface ResolvedConfig {
   authType: "bearer" | "basic";
 }
 
+/**
+ * Settings saved by `skylight-mcp init`, applied only by the local entry points
+ * (src/index.ts), never by the hosted Worker. This module stays free of Node
+ * built-ins so the Worker bundle can import it. Environment variables win.
+ * Only the frame ID and timezone can come from here: nothing that decides where
+ * a token is sent is configurable at all (the API host is pinned in code).
+ */
+export interface FileDefaults {
+  frameId?: string;
+  timezone?: string;
+}
+
+let fileDefaults: FileDefaults = {};
+
+export function setConfigFileDefaults(defaults: FileDefaults): void {
+  fileDefaults = { frameId: defaults.frameId, timezone: defaults.timezone };
+  cachedConfig = null;
+}
+
 export function loadConfig(): Config {
   const result = ConfigSchema.safeParse({
     email: process.env.SKYLIGHT_EMAIL,
     password: process.env.SKYLIGHT_PASSWORD,
     token: process.env.SKYLIGHT_TOKEN,
-    frameId: process.env.SKYLIGHT_FRAME_ID,
+    frameId: process.env.SKYLIGHT_FRAME_ID || fileDefaults.frameId,
     authType: process.env.SKYLIGHT_AUTH_TYPE || "bearer",
-    timezone: process.env.SKYLIGHT_TIMEZONE || "America/New_York",
+    timezone: process.env.SKYLIGHT_TIMEZONE || fileDefaults.timezone || "America/New_York",
   });
 
   if (!result.success) {
@@ -49,6 +68,9 @@ Skylight MCP Server - Configuration Error
 
 Missing or invalid configuration:
 ${errors}
+
+Easiest setup: run "npx -y @davidwoods/skylight-mcp init". It signs you in,
+finds your frame ID and saves your settings.
 
 Authentication (recommended): run "skylight-mcp auth login" once. You sign in
 in your own browser; your password is never given to this program.

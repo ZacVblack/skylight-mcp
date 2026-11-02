@@ -8,6 +8,7 @@ import { SkylightClient } from "./api/client.js";
 import { defaultCredentialStore, type CredentialStore } from "./api/credential-store.js";
 import { getFrame } from "./api/endpoints/frames.js";
 import { loadConfig, type Config } from "./config.js";
+import type { ConfigFile } from "./config-file.js";
 import { runWithContext } from "./context.js";
 
 export type Level = "ok" | "warn" | "fail";
@@ -19,6 +20,10 @@ export interface DoctorDeps {
   /** Calls Skylight once. Returns the frame's own timezone when it reports one. */
   checkApi: () => Promise<{ timezone?: string }>;
   out: (line: string) => void;
+  /** Settings saved by `skylight-mcp init`. Passed in by the CLI; tests leave it null so a real file cannot leak in. */
+  fileConfig: ConfigFile | null;
+  /** Set when the settings file exists but is invalid. */
+  fileConfigError?: string;
 }
 
 /**
@@ -47,6 +52,7 @@ function defaultDeps(): DoctorDeps {
     // loadConfig() only runs when the API check does, after the frame ID has been validated.
     checkApi: () => makeApiCheck(store, loadConfig())(),
     out: (line) => console.log(line),
+    fileConfig: null,
   };
 }
 
@@ -71,20 +77,28 @@ export async function runDoctor(args: readonly string[], overrides: Partial<Doct
   if (major >= 20) add("ok", `Node ${deps.nodeVersion}`);
   else add("fail", `Node ${deps.nodeVersion} is too old. Install Node 20 or newer.`);
 
-  const frame = deps.env.SKYLIGHT_FRAME_ID?.trim();
+  if (deps.fileConfigError) add("fail", `Settings file problem: ${deps.fileConfigError}`);
+
+  const envFrame = deps.env.SKYLIGHT_FRAME_ID?.trim();
+  const frame = envFrame || deps.fileConfig?.frameId;
   if (!frame) {
-    add("fail", "SKYLIGHT_FRAME_ID is not set. It is the number in https://ourskylight.com/my-skylight/<number> after you sign in.");
+    add("fail", "SKYLIGHT_FRAME_ID is not set. Easiest fix: run `npx -y @davidwoods/skylight-mcp init`. By hand, it is the number in https://ourskylight.com/my-skylight/<number> after you sign in.");
+  } else if (!envFrame) {
+    add("ok", "Frame ID is set (saved by skylight-mcp init)");
   } else if (!/^\d+$/.test(frame)) {
     add("warn", "SKYLIGHT_FRAME_ID is set but is not all digits. Check you copied the number from the my-skylight URL.");
   } else {
     add("ok", "SKYLIGHT_FRAME_ID is set");
   }
 
-  const tz = deps.env.SKYLIGHT_TIMEZONE?.trim();
+  const envTz = deps.env.SKYLIGHT_TIMEZONE?.trim();
+  const tz = envTz || deps.fileConfig?.timezone;
   if (!tz) {
     add("warn", "SKYLIGHT_TIMEZONE is not set, so it defaults to America/New_York. Event times and date windows are wrong if your household is elsewhere. Set it, e.g. America/Los_Angeles.");
   } else if (!validTimeZone(tz)) {
     add("fail", `SKYLIGHT_TIMEZONE "${tz}" is not a valid IANA timezone (example: America/Chicago).`);
+  } else if (!envTz) {
+    add("ok", `Timezone is ${tz} (saved by skylight-mcp init)`);
   } else {
     add("ok", `SKYLIGHT_TIMEZONE is ${tz}`);
   }

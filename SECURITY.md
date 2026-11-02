@@ -25,6 +25,7 @@ secrets and never commit them:
 - **Local use (fallback):** in your MCP client config's `env` block, or an untracked `.env`
   file. `.env` and variants are git-ignored; only `.env.example` (placeholders
   only) is tracked.
+- **Settings file:** `skylight-mcp init` saves `frameId` and `timezone` (no secret) to `config.json` in the per-user config directory, mode `0600`. Its schema is strict: any other key, including a host or URL, makes the server refuse to start, so the file cannot redirect where a token is sent. The file is read only by local entry points, never by the Worker bundle.
 - **Never** hard-code credentials in source, tests, docs, or commit messages.
 - Use a **unique password** for your Skylight account so a leak can't reach
   anything else.
