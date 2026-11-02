@@ -45,28 +45,36 @@ liveSuite("repeating meal edit probe (apply_to=all)", { tags: ["write", "meals"]
     expect(await has(2)).toBe(true);
   });
 
-  it("series start date: what does attributes.date hold when read at a later week?", async () => {
+  let derivedStart: string | null = null;
+
+  it("series start date: attributes.date is not exposed, so derive it from a wide read", async () => {
     if (!id) return;
     const client = ctx.client();
-    const readAt = async (n: number): Promise<unknown> => {
-      const at = week(n);
-      const r = await client.request<{ data?: Array<{ id: string; attributes: Record<string, unknown> }> }>(
-        "/api/frames/{frameId}/meals/sittings",
-        {
-          method: "GET",
-          params: { date_min: at, date_max: ctx.daysFromToday(100 + 7 * n + 1), include: "meal_category,meal_recipe,profiles" },
-          apiVersion: "2026-10-15",
-        }
-      );
-      return (r.data ?? []).find((x) => x.id === id)?.attributes.date;
+    type Row = { id: string; attributes: Record<string, unknown> };
+    const read = async (from: string, to: string): Promise<Row | undefined> => {
+      const r = await client.request<{ data?: Row[] }>("/api/frames/{frameId}/meals/sittings", {
+        method: "GET",
+        params: { date_min: from, date_max: to, include: "meal_category,meal_recipe,profiles" },
+        apiVersion: "2026-10-15",
+      });
+      return (r.data ?? []).find((x) => x.id === id);
     };
-    const d0 = await readAt(0);
-    const d2 = await readAt(2);
-    ctx.note(`attributes.date read at week 0 = ${String(d0)} (week 0 is ${week(0)}); read at week 2 = ${String(d2)} (week 2 is ${week(2)})`);
-    expect(d2, "attributes.date read at week 2 is the series start, not the occurrence date").toBe(week(0));
+    const narrow = await read(week(2), ctx.daysFromToday(100 + 14 + 1));
+    ctx.note(`attribute keys on a series read at week 2: ${Object.keys(narrow?.attributes ?? {}).sort().join(", ")}`);
+    const narrowInstances = (narrow?.attributes.instances as string[] | undefined) ?? [];
+    ctx.note(`narrow window (week 2 only): instances = ${narrowInstances.join(",") || "none"}`);
+    try {
+      const wide = await read(ctx.daysFromToday(-730), ctx.daysFromToday(100 + 14 + 1));
+      const instances = ((wide?.attributes.instances as string[] | undefined) ?? []).slice().sort();
+      ctx.note(`wide window (730 days back to week 2): ${instances.length} instances, first = ${instances[0] ?? "none"}, week 0 is ${week(0)}`);
+      derivedStart = instances[0] ?? null;
+    } catch (error) {
+      ctx.note(`wide window read failed: ${error instanceof Error ? error.message : String(error)}`);
+    }
+    expect(derivedStart, "earliest instance over a wide window equals the series start").toBe(week(0));
   });
 
-  it("edit all, addressed at week 2, body date = attributes.date read at week 2", async () => {
+  it("edit all, addressed at week 2, body date = start derived from the wide read", async () => {
     if (!id) return;
     const client = ctx.client();
     const at = week(2);
@@ -77,6 +85,7 @@ liveSuite("repeating meal edit probe (apply_to=all)", { tags: ["write", "meals"]
     );
     const series = (read.data ?? []).find((s) => s.id === id);
     expect(series, "series visible at week 2").toBeTruthy();
+    expect(derivedStart, "a start date was derived; this test does not guess one").not.toBeNull();
     const a = series!.attributes;
     const rel = series!.relationships ?? {};
     const one = (k: string): string | null => {
@@ -84,7 +93,7 @@ liveSuite("repeating meal edit probe (apply_to=all)", { tags: ["write", "meals"]
       return d && !Array.isArray(d) ? d.id : null;
     };
     const body = {
-      date: typeof a.date === "string" ? a.date : week(0),
+      date: derivedStart as string,
       note: typeof a.note === "string" ? a.note : "",
       rrule: a.rrule ?? null,
       summary: renamed,
@@ -94,7 +103,7 @@ liveSuite("repeating meal edit probe (apply_to=all)", { tags: ["write", "meals"]
       profile_ids: [] as string[],
       saveToRecipeBox: false,
     };
-    ctx.note(`sent rrule present: ${body.rrule ? "yes" : "NO"}; body date from attributes.date, equals week 0: ${a.date === week(0) ? "yes" : "NO"}; addressed at week 2`);
+    ctx.note(`sent rrule present: ${body.rrule ? "yes" : "NO"}; body date derived from the read, equals week 0: ${derivedStart === week(0) ? "yes" : "NO"}; addressed at week 2`);
     const res = await client.request<{ data?: Array<{ id: string; attributes: Record<string, unknown> }> }>(
       `/api/frames/{frameId}/meals/sittings/${id}/instances/${at}`,
       { method: "PATCH", body, params: { ...query, apply_to: "all" }, apiVersion: "2026-10-15" }
