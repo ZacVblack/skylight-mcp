@@ -133,7 +133,8 @@ describe("skylight-mcp init", () => {
     const h = harness({ existing: { frameId: "9090", timezone: "America/Chicago" }, answers: [""], frames: new Error("should not be called") });
     expect(await runInit([], h.deps)).toBe(0);
     expect(h.writes).toEqual([{ frameId: "9090", timezone: "America/Chicago" }]);
-    expect(h.asked[0]).toContain("America/Chicago");
+    expect(h.out.join("\n")).toContain("America/Chicago");
+    expect(h.out.join("\n")).toContain("Press Enter");
   });
 
   it("exits non-zero when doctor finds a problem, but still prints the snippet", async () => {

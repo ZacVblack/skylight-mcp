@@ -86,8 +86,10 @@ function defaultDeps(): InitDeps {
 }
 
 async function askTimezone(deps: InitDeps, suggested: string): Promise<string | null> {
+  deps.out(`Your computer's timezone is ${suggested}. Press Enter to use it, or type a different one`);
+  deps.out("(a name like America/Chicago or Europe/London; the full list is at https://en.wikipedia.org/wiki/List_of_tz_database_time_zones).");
   for (let attempt = 0; attempt < 3; attempt++) {
-    const answer = (await deps.prompt(`Timezone [${suggested}]: `)).trim() || suggested;
+    const answer = (await deps.prompt("Timezone: ")).trim() || suggested;
     if (validTimeZone(answer)) return answer;
     deps.out(`"${answer}" is not an IANA timezone name. Examples: America/New_York, America/Chicago, America/Los_Angeles.`);
   }
