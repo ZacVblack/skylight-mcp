@@ -8,6 +8,7 @@ const TOKEN = "tok_secret_value";
 function harness(over: Partial<InitDeps> & { answers?: string[]; signedIn?: boolean; frames?: Array<{ id: string; name: string }> | Error; existing?: ConfigFile | null } = {}) {
   const out: string[] = [];
   const asked: string[] = [];
+  const initials: Array<string | undefined> = [];
   const answers = [...(over.answers ?? [])];
   const authCalls: string[][] = [];
   const writes: ConfigFile[] = [];
@@ -16,8 +17,9 @@ function harness(over: Partial<InitDeps> & { answers?: string[]; signedIn?: bool
   const frames = over.frames ?? [{ id: FRAME_ID, name: "Home frame" }];
   const deps: Partial<InitDeps> = {
     out: (l) => out.push(l),
-    prompt: async (q) => {
+    prompt: async (q, initial) => {
       asked.push(q);
+      initials.push(initial);
       return answers.shift() ?? "";
     },
     store: {
@@ -48,7 +50,7 @@ function harness(over: Partial<InitDeps> & { answers?: string[]; signedIn?: bool
   delete (deps as Record<string, unknown>).signedIn;
   delete (deps as Record<string, unknown>).frames;
   delete (deps as Record<string, unknown>).existing;
-  return { deps, out, asked, authCalls, writes, doctorRuns: () => doctorRuns };
+  return { deps, out, asked, initials, authCalls, writes, doctorRuns: () => doctorRuns };
 }
 
 describe("skylight-mcp init", () => {
@@ -134,6 +136,7 @@ describe("skylight-mcp init", () => {
     expect(await runInit([], h.deps)).toBe(0);
     expect(h.writes).toEqual([{ frameId: "9090", timezone: "America/Chicago" }]);
     expect(h.out.join("\n")).toContain("America/Chicago");
+    expect(h.initials[0]).toBe("America/Chicago"); // pre-filled after "Timezone:"
     expect(h.out.join("\n")).toContain("Press Enter");
   });
 

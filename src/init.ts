@@ -32,7 +32,8 @@ export interface FrameChoice {
 
 export interface InitDeps {
   out: (line: string) => void;
-  prompt: (question: string) => Promise<string>;
+  /** `initial` is pre-filled after the question and can be edited or accepted with Enter. */
+  prompt: (question: string, initial?: string) => Promise<string>;
   store: CredentialStore;
   /** Runs `skylight-mcp auth <args>`. */
   auth: (args: string[]) => Promise<number>;
@@ -53,10 +54,12 @@ function defaultDeps(): InitDeps {
   const store = defaultCredentialStore();
   return {
     out: (line) => console.log(line),
-    prompt: async (question) => {
+    prompt: async (question, initial) => {
       const rl = createInterface({ input: process.stdin, output: process.stderr });
       try {
-        return await rl.question(question);
+        const answer = rl.question(question);
+        if (initial && process.stdin.isTTY) rl.write(initial);
+        return await answer;
       } finally {
         rl.close();
       }
@@ -86,10 +89,10 @@ function defaultDeps(): InitDeps {
 }
 
 async function askTimezone(deps: InitDeps, suggested: string): Promise<string | null> {
-  deps.out(`Your computer's timezone is ${suggested}. Press Enter to use it, or type a different one`);
-  deps.out("(a name like America/Chicago or Europe/London; the full list is at https://en.wikipedia.org/wiki/List_of_tz_database_time_zones).");
+  deps.out("Press Enter to keep the timezone below (it is your computer's), or edit it to a name like");
+  deps.out("America/Chicago or Europe/London. Full list: https://en.wikipedia.org/wiki/List_of_tz_database_time_zones");
   for (let attempt = 0; attempt < 3; attempt++) {
-    const answer = (await deps.prompt("Timezone: ")).trim() || suggested;
+    const answer = (await deps.prompt("Timezone: ", suggested)).trim() || suggested;
     if (validTimeZone(answer)) return answer;
     deps.out(`"${answer}" is not an IANA timezone name. Examples: America/New_York, America/Chicago, America/Los_Angeles.`);
   }
