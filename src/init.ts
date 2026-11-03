@@ -129,18 +129,32 @@ async function askFrame(deps: InitDeps): Promise<string | null> {
   return null;
 }
 
-export const CLIENT_SNIPPET = [
-  "Add it to your MCP client. Nothing else needs configuring: your frame ID and timezone are read from the saved settings.",
-  "",
-  "Claude desktop (Settings > Developer > Edit Config), or any client that uses mcp.json:",
-  '  { "mcpServers": { "skylight": { "command": "npx", "args": ["-y", "@davidwoods/skylight-mcp"] } } }',
-  "",
-  "Claude Code:",
-  "  claude mcp add skylight -- npx -y @davidwoods/skylight-mcp",
-  "",
-  'Windows: use "command": "cmd", "args": ["/c", "npx", "-y", "@davidwoods/skylight-mcp"].',
-  "Then restart the client fully and ask: what's on the family calendar this week?",
-].join("\n");
+export function clientSnippet(platform: string = process.platform): string {
+  const command = platform === "win32" ? '"cmd"' : '"npx"';
+  const args = platform === "win32" ? '["/c", "npx", "-y", "@davidwoods/skylight-mcp"]' : '["-y", "@davidwoods/skylight-mcp"]';
+  return [
+    "Add it to your MCP client. Nothing else needs configuring: your frame ID and timezone are read from the saved settings.",
+    "",
+    "Claude desktop (Settings > Developer > Edit Config), or any client that uses mcp.json:",
+    "",
+    "  {",
+    '    "mcpServers": {',
+    '      "skylight": {',
+    `        "command": ${command},`,
+    `        "args": ${args}`,
+    "      }",
+    "    }",
+    "  }",
+    "",
+    "Claude Code:",
+    "",
+    platform === "win32"
+      ? "  claude mcp add skylight -- cmd /c npx -y @davidwoods/skylight-mcp"
+      : "  claude mcp add skylight -- npx -y @davidwoods/skylight-mcp",
+    "",
+    "Then restart the client fully and ask: what's on the family calendar this week?",
+  ].join("\n");
+}
 
 export async function runInit(_args: readonly string[], overrides: Partial<InitDeps> = {}): Promise<number> {
   const deps = { ...defaultDeps(), ...overrides };
@@ -199,7 +213,7 @@ export async function runInit(_args: readonly string[], overrides: Partial<InitD
     // 5. Check, then show the client snippet
     const doctorCode = await deps.doctor();
     deps.out("");
-    deps.out(CLIENT_SNIPPET);
+    deps.out(clientSnippet());
     return doctorCode === 0 ? 0 : 1;
   } catch (error) {
     deps.out(`Error: ${error instanceof Error ? error.message : "unknown error"}`);

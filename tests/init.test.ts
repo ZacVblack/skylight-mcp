@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CLIENT_SNIPPET, runInit, type InitDeps } from "../src/init.js";
+import { clientSnippet, runInit, type InitDeps } from "../src/init.js";
 import type { ConfigFile } from "../src/config-file.js";
 
 const FRAME_ID = "40414243";
@@ -59,7 +59,7 @@ describe("skylight-mcp init", () => {
     expect(h.authCalls).toEqual([]);
     expect(h.doctorRuns()).toBe(1);
     const text = h.out.join("\n");
-    expect(text).toContain(CLIENT_SNIPPET);
+    expect(text).toContain(clientSnippet());
     expect(text).toContain("claude mcp add skylight -- npx -y @davidwoods/skylight-mcp");
     expect(text).not.toContain("SKYLIGHT_FRAME_ID");
   });
@@ -140,6 +140,18 @@ describe("skylight-mcp init", () => {
   it("exits non-zero when doctor finds a problem, but still prints the snippet", async () => {
     const h = harness({ answers: [""], doctor: async () => 1 });
     expect(await runInit([], h.deps)).toBe(1);
-    expect(h.out.join("\n")).toContain(CLIENT_SNIPPET);
+    expect(h.out.join("\n")).toContain(clientSnippet());
+  });
+});
+
+describe("client snippet", () => {
+  it("is valid JSON for each platform and only shows the platform's own form", () => {
+    for (const platform of ["darwin", "linux", "win32"]) {
+      const text = clientSnippet(platform);
+      const json = text.slice(text.indexOf("{"), text.lastIndexOf("}") + 1);
+      const parsed = JSON.parse(json.split("\n\nClaude Code:")[0]!.trim());
+      expect(parsed.mcpServers.skylight.command).toBe(platform === "win32" ? "cmd" : "npx");
+      expect(text.includes("Windows")).toBe(false);
+    }
   });
 });
