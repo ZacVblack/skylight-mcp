@@ -60,8 +60,8 @@ if it cannot list frames it asks for the number from the address bar
 (`https://ourskylight.com/my-skylight/<number>`; see
 [Finding your Frame ID](#finding-your-frame-id)).
 
-The sign-in works like this: `init` prints a Skylight URL. Open it and sign in
-(in Windows Terminal, hold Ctrl and click). The browser bounces through
+The sign-in works like this: `init` prints a Skylight URL and offers to open it:
+press Enter and your browser opens it (or open the URL yourself). Sign in there. The browser bounces through
 `https://ourskylight.com/welcome?code=...` and on to the home page too fast to
 copy. Get the link from your browser history: `Cmd-Y` (Mac) / `Ctrl-H` (PC),
 search `welcome?code`, right-click the Skylight result dated today (top of the

@@ -47,4 +47,44 @@ describe("cli smoke", () => {
     expect(out.join("\n")).toContain("Signed in.");
     expect(out.join("\n")).not.toContain("Restart your MCP client");
   });
+
+  it("offers to open the sign-in URL when asked, and says so if no browser can be opened", async () => {
+    for (const opened of [true, false]) {
+      const dir = await mkdtemp(path.join(tmpdir(), "cli-"));
+      const out: string[] = [];
+      const asked: string[] = [];
+      const seen: string[] = [];
+      const deps = {
+        store: createFileCredentialStore({ directory: dir }),
+        out: (l: string) => out.push(l),
+        prompt: async (q: string) => (asked.push(q), ""),
+        showNextStep: false,
+        openUrl: async (u: string) => (seen.push(u), opened),
+        savePending: (p: any) => savePendingLogin(p, dir),
+        takePending: () => takePendingLogin(dir),
+      };
+      expect(await runAuthCommand(["login"], deps)).toBe(0);
+      expect(asked[0]).toContain("Press Enter");
+      expect(seen).toHaveLength(1);
+      expect(seen[0]).toContain("oauth/authorize");
+      const text = out.join("\n");
+      expect(text).toContain(opened ? "Opened your browser." : "Could not open a browser");
+      // the long URL is printed only as a fallback
+      expect(text.includes("oauth/authorize")).toBe(!opened);
+    }
+  });
+
+  it("plain `auth login` does not prompt or open anything", async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), "cli-"));
+    const asked: string[] = [];
+    const deps = {
+      store: createFileCredentialStore({ directory: dir }),
+      out: () => {},
+      prompt: async (q: string) => (asked.push(q), ""),
+      savePending: (p: any) => savePendingLogin(p, dir),
+      takePending: () => takePendingLogin(dir),
+    };
+    expect(await runAuthCommand(["login"], deps)).toBe(0);
+    expect(asked).toEqual([]);
+  });
 });

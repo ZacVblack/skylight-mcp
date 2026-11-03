@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.9.1] - 2026-11-02
+
+### Added
+- `init` offers to open the Skylight sign-in page for you (press Enter). It only opens URLs on the pinned Skylight host and never goes through a shell. The paste-back of the `welcome?code=` link is still needed: Skylight's registered redirect cannot reach this program.
+
 ## [1.9.0] - 2026-11-02
 
 ### Added

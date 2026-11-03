@@ -14,6 +14,7 @@
 import { createInterface } from "node:readline/promises";
 import { SkylightClient } from "./api/client.js";
 import { defaultCredentialStore, type CredentialStore } from "./api/credential-store.js";
+import { openSkylightUrl } from "./open-url.js";
 import { runAuthCommand } from "./cli.js";
 import {
   applyConfigFile,
@@ -65,7 +66,7 @@ function defaultDeps(): InitDeps {
       }
     },
     store,
-    auth: (args) => runAuthCommand(args, { store, showNextStep: false }),
+    auth: (args) => runAuthCommand(args, { store, showNextStep: false, openUrl: openSkylightUrl }),
     listFrames: async () => {
       // The frames list is not scoped to a frame, so the placeholder ID is never sent.
       const client = new SkylightClient({ frameId: "0", timezone: "UTC", authType: "bearer" }, store);
