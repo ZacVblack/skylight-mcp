@@ -45,7 +45,9 @@ export async function getCalendarEvents(
       date_min: options.dateMin,
       date_max: adjustedDateMax,
       timezone: options.timezone ?? client.timezone,
-      include: options.include,
+      // Without this the list names at most one profile per event (captured from the web app,
+      // which always sends it), so a two-person event would read back as one person.
+      include: options.include ?? "categories",
     }
   );
   return response.data;

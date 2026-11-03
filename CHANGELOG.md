@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- `get_calendar_events`, `get_week_overview`, `find_conflicts` and `find_free_slots` named at most one profile on an event shared by two people (an event set to Alex and Jordan read back as one of them). The request now asks for `include=categories`, as the web app does, so every assigned profile is returned.
+
 ## [1.10.0] - 2026-11-03
 
 ### Added

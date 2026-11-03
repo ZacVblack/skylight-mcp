@@ -97,3 +97,30 @@ describe("get_calendar_events output", () => {
     expect(text).not.toContain("profiles:");
   });
 });
+
+describe("get_calendar_events profiles on a shared event", () => {
+  it("asks for categories and prints every profile an event is assigned to", async () => {
+    const urls: string[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        const u = String(url);
+        urls.push(u);
+        if (u.includes("/categories")) {
+          const cat = (id: string, label: string) => ({ id, type: "category", attributes: { label, linked_to_profile: true } });
+          return new Response(JSON.stringify({ data: [cat("11", "Alex"), cat("13", "Jordan")] }), { status: 200 });
+        }
+        // Mirrors the live API: the full set comes back only when categories are included;
+        // otherwise a single profile is reported.
+        const withAll = u.includes("include=categories");
+        const relationships = withAll
+          ? { categories: { data: [{ id: "11", type: "category" }, { id: "13", type: "category" }] } }
+          : { category: { data: { id: "13", type: "category" } } };
+        return new Response(JSON.stringify({ data: [{ id: "1", type: "calendar_event", attributes: attrs, relationships }] }), { status: 200 });
+      })
+    );
+    const text = await listEvents();
+    expect(urls.some((u) => u.includes("calendar_events") && u.includes("include=categories"))).toBe(true);
+    expect(text).toContain("profiles: Alex, Jordan");
+  });
+});
