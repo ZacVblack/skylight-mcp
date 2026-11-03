@@ -17,6 +17,23 @@ async function main() {
     return;
   }
 
+  if (process.argv[2] === "calendars") {
+    const { setQuietRequestLog } = await import("./api/client.js");
+    setQuietRequestLog(true);
+    const { applyConfigFile, ConfigFileError } = await import("./config-file.js");
+    try {
+      await applyConfigFile();
+    } catch (error) {
+      if (!(error instanceof ConfigFileError)) throw error;
+      console.error(error.message);
+      process.exitCode = 1;
+      return;
+    }
+    const { runCalendarsCommand } = await import("./calendars-cli.js");
+    process.exitCode = await runCalendarsCommand(process.argv.slice(3));
+    return;
+  }
+
   if (process.argv[2] === "doctor") {
     const { setQuietRequestLog } = await import("./api/client.js");
     setQuietRequestLog(true);

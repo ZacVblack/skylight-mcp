@@ -112,6 +112,33 @@ npx -y @davidwoods/skylight-mcp doctor
 to Skylight, and says what to fix. It never prints tokens or your frame ID.
 Add `--offline` to skip the network call.
 
+### What you can sync, and what this server can do
+
+Skylight's **Sync Calendar** screen offers these. From the app's screen; the "this server" column is what changes here.
+
+| Option in Skylight | Add it | Manage it with this server |
+| --- | --- | --- |
+| Calendar URL (team, school, league, iCloud published calendar) | `skylight-mcp calendars add`, or in the app | Rename, link to profiles, remove, list |
+| Google, Outlook/Hotmail/Live, iCloud account, Cozi, TeamSnap | Sign in inside the Skylight app (cannot be done here) | List only |
+| US Holidays, Individual Events | In the app | List only |
+
+Calendars from a subscription link are one-way: Skylight reads them and cannot write back.
+
+### Add a team, school or league calendar
+
+```
+npx -y @davidwoods/skylight-mcp calendars add
+```
+
+Paste the calendar's address when asked (the link ending in `.ics`, or starting with
+`webcal://`). Nothing is shown as you paste, and the address never goes into your
+shell history, a chat, or a log: it is a secret, because anyone with the link can
+read that calendar. Skylight fetches the feed itself, names the calendar from it, and
+the events appear on your frame. This is a command and deliberately not an MCP tool.
+To stop syncing one, ask your assistant to remove it (`delete_source_calendar`, which
+previews first), or remove it in the Skylight app. Google, Outlook, iCloud and Cozi
+accounts are connected in the Skylight app, not here.
+
 ### Manual setup (without `init`)
 
 If you would rather not use `init`, or it fails, set the two values yourself
@@ -395,6 +422,7 @@ Nothing here is hidden behind a flag. It is either unavailable from Skylight or 
 - **Settings, account, notifications, sleep schedule, device navigation**: none of these are exposed.
 - **Photos**: uploads and anything beyond listing albums.
 - **Accounts with more than one frame**: the server is pinned to one frame ID.
+- **Calendar feeds**: adding one is a CLI command, `skylight-mcp calendars add`, and deliberately not an MCP tool, because the feed address is a secret and a tool argument would put it in the chat transcript. You paste it into a hidden prompt; only the calendar's name and host are printed. Linking a feed to a profile or label, changing which calendar new events are saved to, and adding Google, Outlook, iCloud or Cozi accounts (browser sign-in in the Skylight app) are not supported.
 - **Credentials**: sign-in, sign-out and token access are CLI commands (`skylight-mcp auth ...`) and are deliberately not MCP tools.
 
 ### Keeping this honest
@@ -440,6 +468,9 @@ Messages are the notes shown on the frame (Skylight's web app calls them "nudges
 |------|--------|-------------|
 | `get_calendar_events` | read | Events for a date range |
 | `get_source_calendars` | read | Connected calendar sources (Google, iCloud, etc.), with each one's role and whether it is editable. Private feed addresses are hidden: only the host is shown |
+| `delete_source_calendar` | destructive | Stop syncing a subscribed calendar feed (a team, school or league schedule). Preview first, then `confirm: true`. Its events leave the family calendar and wall display until it is added again. Feeds only (`kind: webcal`); account calendars are refused. Local server only. |
+| `update_source_calendar_profiles` | write | Link a subscribed calendar feed to family profiles, or unlink it (the "Link profiles" checkboxes). Preview first, then `confirm: true`; it sends the complete set so the calendar's label is kept, then reads it back. Feeds only (`kind: webcal`); a calendar can never be left with no profile or label. |
+| `rename_source_calendar` | write | Rename a subscribed calendar feed as it appears in Skylight (feeds are named from the feed itself, often at length). Preview first, then `confirm: true`; reads it back and checks the linked profiles did not change. Feeds only (`kind: webcal`). |
 | `create_calendar_event` | write | Add an event. `profiles` assigns it to named family members. Local times are sent with the frame's UTC offset. |
 | `update_calendar_event` | write | Change an event, including who it is assigned to (`profiles`) |
 | `delete_calendar_event` | destructive | Delete an event. Local server only. |

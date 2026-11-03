@@ -132,6 +132,10 @@ export interface SourceCalendarResource {
   type: "source_calendar";
   id: string;
   attributes: SourceCalendarAttributes;
+  // Captured from the web app: the linked profile and label categories.
+  relationships?: {
+    categories?: { data?: Array<{ id: string }> | null };
+  };
 }
 
 export interface CalendarEventAttributes {

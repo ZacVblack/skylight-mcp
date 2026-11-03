@@ -16,6 +16,8 @@ secrets and never commit them:
   holding the link can read that calendar. Every tool that prints raw
   attributes passes them through one shared redactor, so only the host is shown;
   do not paste the full address anywhere
+  `skylight-mcp calendars add` takes a new address through a hidden prompt only. It is
+  refused as an argument, never sent to a tool, and removed from any error text.
 
 ## Where credentials belong
 
