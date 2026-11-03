@@ -144,10 +144,16 @@ Parameters:
 
         if (late.length) out.push("", "Overdue chores:", ...late.map((l) => `  chore ${l}`));
 
-        const conflicts = findConflicts(intervals);
+        const all = findConflicts(intervals);
+        const conflicts = all.filter((c) => !c.duplicate);
+        const duplicates = all.filter((c) => c.duplicate);
         out.push("", conflicts.length ? "Conflicts:" : "Conflicts: none");
         for (const c of conflicts) {
           out.push(`  ${formatDay(dateOf(c.overlapStart, tz))}: "${c.a.summary}" and "${c.b.summary}" overlap ${formatRange(c.overlapStart, c.overlapEnd, tz)}`);
+        }
+        if (duplicates.length) {
+          out.push("", "Duplicate feed entries (the same event listed twice, not a clash):");
+          for (const c of duplicates) out.push(`  ${formatDay(dateOf(c.overlapStart, tz))}: "${c.a.summary}" = "${c.b.summary}" ${formatRange(c.a.start, c.a.end, tz)}`);
         }
 
         if (meals === null) out.push("", "Meals: not available on this account (Skylight Plus).");
@@ -176,7 +182,7 @@ Parameters:
 
   server.tool(
     "find_conflicts",
-    `Find calendar events that overlap in time within a date range. All-day events never count as conflicts.
+    `Find calendar events that overlap in time within a date range. All-day events never count as conflicts. A subscribed feed that lists the same event twice (same start, end and title apart from a note like "Arrive 20 minutes early") is reported separately as a duplicate, not a conflict.
 
 Returns each overlapping pair with the overlap window, or "none".`,
     {
@@ -190,12 +196,20 @@ Returns each overlapping pair with the overlap window, or "none".`,
         const { start, end } = resolveRange(date, dateEnd, days, tz);
         const events = await getCalendarEvents({ dateMin: start, dateMax: end, timezone: tz });
         const intervals = events.map((e) => eventToInterval(e as { id: string; attributes: Record<string, unknown> }, tz)).filter((i): i is Interval => i !== null);
-        const conflicts = findConflicts(intervals);
-        if (conflicts.length === 0) return text(`No conflicts between ${formatDay(start)} and ${formatDay(end)}.`);
+        const all = findConflicts(intervals);
+        const conflicts = all.filter((c) => !c.duplicate);
+        const duplicates = all.filter((c) => c.duplicate);
+        const dupLines = duplicates.map(
+          (c) => `- ${formatDay(dateOf(c.overlapStart, tz))}: "${c.a.summary}" and "${c.b.summary}" ${formatRange(c.a.start, c.a.end, tz)} [event IDs: ${c.a.id}, ${c.b.id}]`
+        );
+        const dupBlock = dupLines.length
+          ? `\n\nDuplicate feed entries (the same event listed twice by a subscribed calendar, so not a clash):\n\n${dupLines.join("\n")}`
+          : "";
+        if (conflicts.length === 0) return text(`No conflicts between ${formatDay(start)} and ${formatDay(end)}.${dupBlock}`);
         const lines = conflicts.map(
           (c) => `- ${formatDay(dateOf(c.overlapStart, tz))}: "${c.a.summary}" (${formatRange(c.a.start, c.a.end, tz)}) and "${c.b.summary}" (${formatRange(c.b.start, c.b.end, tz)}) overlap ${formatRange(c.overlapStart, c.overlapEnd, tz)} [event IDs: ${c.a.id}, ${c.b.id}]`
         );
-        return text(`Conflicts between ${formatDay(start)} and ${formatDay(end)}:\n\n${lines.join("\n")}`);
+        return text(`Conflicts between ${formatDay(start)} and ${formatDay(end)}:\n\n${lines.join("\n")}${dupBlock}`);
       } catch (error) {
         return text(formatErrorForMcp(error), true);
       }

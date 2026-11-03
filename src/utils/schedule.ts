@@ -17,11 +17,15 @@ export interface Interval {
   /** Free-form origin, e.g. "calendar", "chore". */
   kind: string;
   id?: string;
+  /** Where the event came from (Skylight's `source`, e.g. "google", "ics_link", "skylight"). */
+  source?: string;
 }
 
 export interface Conflict {
   a: Interval;
   b: Interval;
+  /** True when a and b are the same subscribed-feed entry listed twice, not two real commitments. */
+  duplicate?: boolean;
   /** Overlap window, epoch ms. */
   overlapStart: number;
   overlapEnd: number;
@@ -164,13 +168,49 @@ export function eventToInterval(
       summary,
       kind: "calendar",
       id: event.id,
+      source: typeof a.source === "string" ? a.source : undefined,
     };
   }
 
   const start = Date.parse(startRaw);
   const end = endRaw ? Date.parse(endRaw) : start + 60 * 60 * 1000;
   if (Number.isNaN(start) || Number.isNaN(end)) return null;
-  return { start, end: Math.max(end, start), allDay: false, summary, kind: "calendar", id: event.id };
+  return {
+    start,
+    end: Math.max(end, start),
+    allDay: false,
+    summary,
+    kind: "calendar",
+    id: event.id,
+    source: typeof a.source === "string" ? a.source : undefined,
+  };
+}
+
+/** Title with case, spacing and trailing "(...)" notes such as "(Arrive 20 minutes early)" removed. */
+function baseTitle(summary: string): string {
+  let t = summary.trim().toLowerCase();
+  for (;;) {
+    const next = t.replace(/\s*\([^()]*\)\s*$/, "");
+    if (next === t) break;
+    t = next;
+  }
+  return t.replace(/\s+/g, " ");
+}
+
+/**
+ * A subscribed feed that lists the same game twice (one copy with an "Arrive N minutes early"
+ * suffix) is one commitment, not a clash. Deliberately narrow: both events from a feed, identical
+ * start and end, and the same title apart from trailing notes. Two Google or Skylight events at
+ * the same time are never called duplicates, because that may be a real double-booking.
+ */
+export function isFeedDuplicate(a: Interval, b: Interval): boolean {
+  return (
+    a.source === "ics_link" &&
+    b.source === "ics_link" &&
+    a.start === b.start &&
+    a.end === b.end &&
+    baseTitle(a.summary) === baseTitle(b.summary)
+  );
 }
 
 /** Timed intervals that overlap. All-day items never conflict. */
@@ -184,7 +224,7 @@ export function findConflicts(intervals: Interval[]): Conflict[] {
       if (b.start >= a.end) break; // sorted by start; nothing later can overlap a
       const overlapStart = Math.max(a.start, b.start);
       const overlapEnd = Math.min(a.end, b.end);
-      if (overlapEnd > overlapStart) out.push({ a, b, overlapStart, overlapEnd });
+      if (overlapEnd > overlapStart) out.push({ a, b, overlapStart, overlapEnd, duplicate: isFeedDuplicate(a, b) });
     }
   }
   return out;

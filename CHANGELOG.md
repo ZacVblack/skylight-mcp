@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
+- `find_conflicts` and `get_week_overview` no longer report a subscribed feed's double-listed event (for example a TeamSnap game listed twice, one copy with "Arrive 20 minutes early") as a conflict. It is listed separately as a duplicate. Deliberately narrow: both events must come from a feed and have the same start, end and title apart from trailing "(...)" notes. Two Google or Skylight events at the same time are still conflicts, because that may be a real double-booking.
+
+### Changed
 - `delete_calendar_event` is now preview-first and available on the hosted server. It takes the event's `date` as well as its ID, shows the event, and deletes only with `confirm: true`, then reads the day back to confirm it is gone. It refuses events synced from Google or a subscribed feed, repeating events and non-editable events, because what a delete does to those is unverified or would be undone by the next sync. **Breaking for callers of the old local tool:** `date` is now required and an unconfirmed call no longer deletes.
 
 ## [1.10.1] - 2026-11-03

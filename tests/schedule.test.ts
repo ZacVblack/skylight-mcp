@@ -88,6 +88,46 @@ describe("findConflicts", () => {
   });
 });
 
+describe("findConflicts: feed duplicates", () => {
+  const feed = (from: string, to: string, summary: string, source = "ics_link"): Interval => ({ ...timed("2026-11-08", from, to, summary), source });
+
+  it("calls the same feed entry listed twice a duplicate, not a conflict", () => {
+    const c = findConflicts([
+      feed("18:30", "19:30", "Game: Team vs Rivals (Arrive 20 minutes early)"),
+      feed("18:30", "19:30", "Game: Team vs Rivals"),
+    ]);
+    expect(c).toHaveLength(1);
+    expect(c[0].duplicate).toBe(true);
+  });
+
+  it("still reports a real clash between two feed events at overlapping times", () => {
+    const c = findConflicts([feed("18:30", "19:30", "Game: Team vs Rivals"), feed("19:00", "20:00", "Game: Team vs Rivals")]);
+    expect(c[0].duplicate).toBe(false);
+  });
+
+  it("needs both the same start and the same end", () => {
+    expect(findConflicts([feed("18:30", "19:30", "Game"), feed("19:00", "19:30", "Game")])[0].duplicate).toBe(false); // same end only
+    expect(findConflicts([feed("18:30", "19:30", "Game"), feed("18:30", "20:00", "Game")])[0].duplicate).toBe(false); // same start only
+  });
+
+  it("does not hide a different feed event at the same time", () => {
+    const c = findConflicts([feed("18:30", "19:30", "Game: Team vs Rivals"), feed("18:30", "19:30", "Practice")]);
+    expect(c[0].duplicate).toBe(false);
+  });
+
+  it("never calls two Google or Skylight events at the same time duplicates (may be a real double-booking)", () => {
+    for (const source of ["google", "skylight"]) {
+      const c = findConflicts([feed("18:30", "19:30", "Dentist", source), feed("18:30", "19:30", "Dentist", source)]);
+      expect(c[0].duplicate).toBe(false);
+    }
+  });
+
+  it("does not treat a feed event and a Google event of the same name as duplicates", () => {
+    const c = findConflicts([feed("18:30", "19:30", "Game", "ics_link"), feed("18:30", "19:30", "Game", "google")]);
+    expect(c[0].duplicate).toBe(false);
+  });
+});
+
 describe("findFreeSlots", () => {
   it("returns gaps within the window of at least the minimum length", () => {
     const slots = findFreeSlots(

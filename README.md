@@ -446,7 +446,7 @@ One call returns calendar, chores/tasks, meals and lists, merged per day.
 | Tool | Effect | Description |
 |------|--------|-------------|
 | `get_week_overview` | read | Per-day events, chores/tasks (status, assignee, points), meals, overdue chores, conflicts and list summaries in one compact call. Omits owner emails and calendar IDs. |
-| `find_conflicts` | read | Timed events that overlap in a date range. All-day events never conflict. |
+| `find_conflicts` | read | Timed events that overlap in a date range. All-day events never conflict. A subscribed feed that lists the same event twice (same start, end and title apart from a trailing note such as "Arrive 20 minutes early") is reported separately as a duplicate, not a conflict. |
 | `find_free_slots` | read | Gaps of at least N minutes inside a daily window (default 08:00 to 21:00). |
 | `plan_week_meals` | write | Fill several meal slots at once. `dryRun` previews; occupied slots are skipped, never overwritten; all entries are validated before anything is written; optional grocery push for recipes. Entries can carry `note` and `description` (the app's "Instructions or ingredients" field), attached after the meal is created. |
 
