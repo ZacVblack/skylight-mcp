@@ -82,7 +82,7 @@ change either value.
 
 ### 2. Add to your MCP client
 
-**Claude desktop** (Settings → Developer → Edit Config), or any client that uses `mcp.json`:
+**Claude desktop** (Settings → Desktop app → Local MCP servers → Edit config; older versions: Settings → Developer → Edit Config), or any client that uses `mcp.json`:
 ```json
 {
   "mcpServers": {

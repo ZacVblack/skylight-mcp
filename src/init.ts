@@ -138,7 +138,7 @@ export function clientSnippet(platform: string = process.platform): string {
   return [
     "Add it to your MCP client. Nothing else needs configuring: your frame ID and timezone are read from the saved settings.",
     "",
-    "Claude desktop (Settings > Developer > Edit Config), or any client that uses mcp.json:",
+    "Claude desktop (Settings > Desktop app > Local MCP servers > Edit config), or any client that uses mcp.json:",
     "",
     "  {",
     '    "mcpServers": {',
