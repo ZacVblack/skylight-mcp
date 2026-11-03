@@ -74,7 +74,7 @@ export async function runAuthCommand(args: readonly string[], overrides: Partial
         const { loginUrl, pending } = beginBrowserLogin(deps.now());
         await deps.savePending(pending);
         if (deps.openUrl) {
-          deps.out("1. Sign in to Skylight. Press Enter and your browser opens the sign-in page.");
+          deps.out("\n1. Sign in to Skylight. Press Enter and your browser opens the sign-in page.");
           await deps.prompt("Press Enter to open it... ");
           const opened = await deps.openUrl(loginUrl);
           if (opened) {
