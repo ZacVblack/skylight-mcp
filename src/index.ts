@@ -10,12 +10,16 @@ async function main() {
   }
 
   if (process.argv[2] === "init") {
+    const { setQuietRequestLog } = await import("./api/client.js");
+    setQuietRequestLog(true);
     const { runInit } = await import("./init.js");
     process.exitCode = await runInit(process.argv.slice(3));
     return;
   }
 
   if (process.argv[2] === "doctor") {
+    const { setQuietRequestLog } = await import("./api/client.js");
+    setQuietRequestLog(true);
     const { runDoctor } = await import("./doctor.js");
     const { applyConfigFile, ConfigFileError } = await import("./config-file.js");
     let fileConfig = null;

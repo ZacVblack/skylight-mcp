@@ -32,6 +32,12 @@ export interface RequestOptions {
  * The frame ID identifies the household, and these log lines end up in terminals, support
  * requests and pasted bug reports. Show the shape of the request, not the ID.
  */
+let quietRequestLog = false;
+/** Silence the per-request trace lines for interactive CLI commands (init, doctor). Warnings and errors still print. */
+export function setQuietRequestLog(quiet: boolean): void {
+  quietRequestLog = quiet;
+}
+
 export function redactForLog(url: string): string {
   return url.replace(/\/frames\/[^/?#]+/g, "/frames/<frame>");
 }
@@ -269,7 +275,7 @@ export class SkylightClient {
     const resolvedEndpoint = endpoint.replace("{frameId}", this.config.frameId);
     const url = this.buildUrl(resolvedEndpoint, params);
 
-    console.error(`[client] ${method} ${redactForLog(url)}`);
+    if (!quietRequestLog) console.error(`[client] ${method} ${redactForLog(url)}`);
 
     const headers: Record<string, string> = {
       Authorization: await this.getAuthHeader(),
@@ -288,7 +294,7 @@ export class SkylightClient {
       body: body ? JSON.stringify(body) : undefined,
     });
 
-    console.error(`[client] Response: ${response.status}`);
+    if (!quietRequestLog) console.error(`[client] Response: ${response.status}`);
 
     if (!response.ok) {
       // Retry once on 401 with a fresh credential (not for an explicit token)
