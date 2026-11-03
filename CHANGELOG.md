@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.11.0] - 2026-11-03
+
 ### Changed
 - `find_conflicts` and `get_week_overview` no longer report a subscribed feed's double-listed event (for example a TeamSnap game listed twice, one copy with "Arrive 20 minutes early") as a conflict. It is listed separately as a duplicate. Deliberately narrow: both events must come from a feed and have the same start, end and title apart from trailing "(...)" notes. Two Google or Skylight events at the same time are still conflicts, because that may be a real double-booking.
 
