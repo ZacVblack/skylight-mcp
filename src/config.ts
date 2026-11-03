@@ -62,7 +62,13 @@ export function loadConfig(): Config {
   });
 
   if (!result.success) {
-    const errors = result.error.issues.map((e) => `  - ${e.message}`).join("\n");
+    const errors = result.error.issues
+      .map((e) =>
+        e.path[0] === "frameId"
+          ? "  - No frame ID. Run init (below), or set SKYLIGHT_FRAME_ID."
+          : `  - ${e.path.length ? `${String(e.path[0])}: ` : ""}${e.message}`
+      )
+      .join("\n");
     console.error(`
 Skylight MCP Server - Configuration Error
 
@@ -85,10 +91,8 @@ Required:
 Optional:
   SKYLIGHT_TIMEZONE - Timezone for dates (default: America/New_York)
 
-To find your frame ID:
-1. Log in to the Skylight app
-2. Use a proxy tool to capture API traffic
-3. Look for the frame ID in URLs like /api/frames/{frameId}/chores
+Your frame ID is the number in https://ourskylight.com/my-skylight/<number>
+when you are signed in to the Skylight web app.
 `);
     process.exit(1);
     // process.exit never returns in Node; this satisfies runtimes whose types disagree.
