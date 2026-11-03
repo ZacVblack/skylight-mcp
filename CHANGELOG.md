@@ -7,12 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.9.0] - 2026-11-02
+
 ### Added
 - `skylight-mcp init`: guided setup. Detects the timezone, runs the browser-paste sign-in, finds the frame from `/api/frames`, saves `frameId` and `timezone` to a settings file, runs `doctor`, prints the MCP client snippet. Falls back to typing the frame ID if frames cannot be listed.
 - Settings file (`config.json` in the per-user config directory, `0600`). Strict schema: only `frameId` and `timezone`; any other key (including anything host-like) makes the server refuse to start. Environment variables override it. The hosted Worker does not read it.
 - `doctor` understands the settings file and reports a bad one.
 
 ### Changed
+- Missing-frame error now says "No frame ID. Run init" and drops the proxy-capture advice.
+- `init` and `doctor` no longer print per-request trace lines (the MCP server still does).
 - README Quick Start is now `init`, add to client, `doctor`; the manual environment-variable path moved to "Manual setup".
 
 ## [1.8.9] - 2026-11-02
