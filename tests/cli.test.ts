@@ -67,7 +67,10 @@ describe("cli smoke", () => {
       expect(asked[0]).toContain("Press Enter");
       expect(seen).toHaveLength(1);
       expect(seen[0]).toContain("oauth/authorize");
-      expect(out.join("\n")).toContain(opened ? "Opened your browser." : "Could not open a browser");
+      const text = out.join("\n");
+      expect(text).toContain(opened ? "Opened your browser." : "Could not open a browser");
+      // the long URL is printed only as a fallback
+      expect(text.includes("oauth/authorize")).toBe(!opened);
     }
   });
 
