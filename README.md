@@ -46,78 +46,49 @@ setup first; see
 [Hosted server (Claude Duet, Claude on other devices)](#hosted-server-claude-duet-claude-on-other-devices)
 if you need it later.
 
-### 1. Find your frame ID and timezone
-
-Sign in to the Skylight web app at https://ourskylight.com. Your frame ID is the
-number in the address bar, `https://ourskylight.com/my-skylight/<number>` (see
-[Finding your Frame ID](#finding-your-frame-id)). Your timezone is an IANA name
-such as `America/Chicago`. **Set it**: it defaults to `America/New_York`, and
-event times and date windows come out wrong anywhere else.
-
-### 2. Set them in your terminal
-
-These last only for the terminal window you set them in. Your MCP client does
-not inherit them; step 5 puts them in its config.
-
-macOS / Linux:
-```bash
-export SKYLIGHT_FRAME_ID=your_frame_id
-export SKYLIGHT_TIMEZONE=America/New_York
-```
-
-Windows PowerShell:
-```powershell
-$env:SKYLIGHT_FRAME_ID="your_frame_id"
-$env:SKYLIGHT_TIMEZONE="America/New_York"
-```
-
-### 3. Sign in (once)
+### 1. Run the setup
 
 ```bash
-npx -y @davidwoods/skylight-mcp auth login
+npx -y @davidwoods/skylight-mcp init
 ```
 
-This prints a Skylight sign-in URL. Open it in your browser and sign in (in Windows
-Terminal, hold Ctrl and click the URL). The
-browser bounces through `https://ourskylight.com/welcome?code=...` and on to
-the Skylight home page too fast to copy. Get it from your browser history:
-`Cmd-Y` (Mac) / `Ctrl-H` (PC), search `welcome?code`, right-click the Skylight
-result dated today (top of the list; older ones are earlier sign-ins and will not
-work), Copy link address. Then:
+`init` asks for your timezone (it offers the one your computer uses), runs the
+browser sign-in, finds your frame from your account, saves the frame ID and
+timezone to a small settings file, runs `doctor`, and prints the lines to paste
+into your MCP client. If your account has more than one frame it asks which;
+if it cannot list frames it asks for the number from the address bar
+(`https://ourskylight.com/my-skylight/<number>`; see
+[Finding your Frame ID](#finding-your-frame-id)).
 
-```bash
-npx -y @davidwoods/skylight-mcp auth complete
-```
+The sign-in works like this: `init` prints a Skylight URL. Open it and sign in
+(in Windows Terminal, hold Ctrl and click). The browser bounces through
+`https://ourskylight.com/welcome?code=...` and on to the home page too fast to
+copy. Get the link from your browser history: `Cmd-Y` (Mac) / `Ctrl-H` (PC),
+search `welcome?code`, right-click the Skylight result dated today (top of the
+list; older ones are earlier sign-ins and will not work), Copy link address,
+and paste it when `init` asks. Your password never touches this program; only
+the resulting OAuth tokens are stored, encrypted with a key in the macOS
+Keychain (plain `0600` file on Linux/Windows). macOS may ask once to allow
+Keychain access. If the Keychain is unusable, `init` stops; it never falls back
+to plaintext on macOS.
 
-and paste it. Your password never touches this program; only the resulting
-OAuth tokens are stored, encrypted with a key in the macOS Keychain (plain
-`0600` file on Linux/Windows). macOS may ask once to allow Keychain access.
-`auth status` and `auth logout` do what they say.
+The settings file holds the frame ID and timezone only: no token, no host.
+It lives in `~/Library/Application Support/skylight-mcp/config.json` (macOS),
+`%APPDATA%\skylight-mcp\config.json` (Windows) or
+`~/.config/skylight-mcp/config.json` (elsewhere), mode `0600`, and an
+unrecognised key makes the server refuse to start. Environment variables
+(`SKYLIGHT_FRAME_ID`, `SKYLIGHT_TIMEZONE`) override it. Run `init` again to
+change either value.
 
-### 4. Check it
+### 2. Add to your MCP client
 
-```bash
-npx -y @davidwoods/skylight-mcp doctor
-```
-
-`doctor` checks Node, the frame ID, the timezone, your sign-in and one real call
-to Skylight, and says what to fix. It never prints tokens or your frame ID.
-Add `--offline` to skip the network call. Do this before step 5: a client that
-fails to start gives you much less to go on than `doctor` does.
-
-### 5. Add to your MCP client
-
-**Claude desktop** (Settings → Developer → Edit Config), or any client that uses `mcp.json`:
+**Claude desktop** (Settings → Desktop app → Local MCP servers → Edit config; older versions: Settings → Developer → Edit Config), or any client that uses `mcp.json`:
 ```json
 {
   "mcpServers": {
     "skylight": {
       "command": "npx",
-      "args": ["-y", "@davidwoods/skylight-mcp"],
-      "env": {
-        "SKYLIGHT_FRAME_ID": "your_frame_id",
-        "SKYLIGHT_TIMEZONE": "America/New_York"
-      }
+      "args": ["-y", "@davidwoods/skylight-mcp"]
     }
   }
 }
@@ -125,13 +96,43 @@ fails to start gives you much less to go on than `doctor` does.
 
 **Claude Code:**
 ```bash
-claude mcp add skylight \
-  -e SKYLIGHT_FRAME_ID=your_frame_id -e SKYLIGHT_TIMEZONE=America/New_York \
-  -- npx -y @davidwoods/skylight-mcp
+claude mcp add skylight -- npx -y @davidwoods/skylight-mcp
 ```
 
 Restart the client fully (Cmd-Q on Mac), then ask it "what's on the family
 calendar this week?"
+
+### 3. Check it any time
+
+```bash
+npx -y @davidwoods/skylight-mcp doctor
+```
+
+`doctor` checks Node, the frame ID, the timezone, your sign-in and one real call
+to Skylight, and says what to fix. It never prints tokens or your frame ID.
+Add `--offline` to skip the network call.
+
+### Manual setup (without `init`)
+
+If you would rather not use `init`, or it fails, set the two values yourself
+and sign in with the lower-level commands. Find your frame ID as above; the
+timezone is an IANA name such as `America/Chicago` and **must be set**: it
+defaults to `America/New_York`, and event times come out wrong anywhere else.
+
+```bash
+# macOS / Linux
+export SKYLIGHT_FRAME_ID=your_frame_id
+export SKYLIGHT_TIMEZONE=America/New_York
+# Windows PowerShell:  $env:SKYLIGHT_FRAME_ID="your_frame_id"; $env:SKYLIGHT_TIMEZONE="America/New_York"
+npx -y @davidwoods/skylight-mcp auth login
+npx -y @davidwoods/skylight-mcp auth complete   # then paste the welcome?code= link
+```
+
+Terminal variables are not inherited by your MCP client. Put them in the
+client's `env` block instead:
+`"env": {"SKYLIGHT_FRAME_ID": "your_frame_id", "SKYLIGHT_TIMEZONE": "America/New_York"}`
+(Claude Code: `-e SKYLIGHT_FRAME_ID=... -e SKYLIGHT_TIMEZONE=...`).
+`auth status` and `auth logout` do what they say.
 
 ### From source (contributors)
 
@@ -167,7 +168,7 @@ fixed in 1.8.0), the live test suite, and `worker:setup`.
 | Symptom | Likely cause and fix |
 |---|---|
 | `'skylight-mcp' is not recognized` (Windows) or `skylight-mcp: command not found` | You ran `npx` from inside a clone of this repo, so npx tried to run the local project, whose command is not linked. `cd` to any other folder and run it again. From a clone, use `node dist/index.js` instead. |
-| Server fails to start, mentions configuration | `SKYLIGHT_FRAME_ID` missing. Run `doctor`. |
+| Server fails to start, mentions configuration | No frame ID: run `init` (or `doctor` to see what is missing). An invalid settings file also stops the server; `doctor` names the problem. |
 | "Not signed in" | Run `auth login` then `auth complete`. Logins expire after 10 minutes. |
 | macOS Keychain error | The server refuses to fall back to plaintext. Unlock the Keychain or allow access when prompted. |
 | Events show at the wrong hour | `SKYLIGHT_TIMEZONE` unset (defaults to New York). Set your zone. |
@@ -250,8 +251,8 @@ The hard way, if that URL doesn't appear:
 | `SKYLIGHT_AUTH_TYPE` | No | `bearer` (default) or `basic` (only with `SKYLIGHT_TOKEN`) |
 | `SKYLIGHT_EMAIL` | No (deprecated) | Fallback email/password login |
 | `SKYLIGHT_PASSWORD` | No (deprecated) | Fallback email/password login |
-| `SKYLIGHT_FRAME_ID` | Yes | Your household frame ID |
-| `SKYLIGHT_TIMEZONE` | No | Default timezone (default: `America/New_York`) |
+| `SKYLIGHT_FRAME_ID` | Yes, unless saved by `init` | Your household frame ID; overrides the settings file |
+| `SKYLIGHT_TIMEZONE` | No | Default timezone; overrides the settings file (default: `America/New_York`) |
 
 ### Auth Notes
 

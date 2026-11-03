@@ -30,6 +30,8 @@ export interface CliDeps {
   complete: (url: string, pending: PendingLogin) => Promise<StoredCredential>;
   refresh: (credential: StoredCredential) => Promise<StoredCredential>;
   now: () => number;
+  /** Print the "now run complete" instructions after login. `init` turns this off. */
+  showNextStep: boolean;
 }
 
 function defaultDeps(): CliDeps {
@@ -49,6 +51,7 @@ function defaultDeps(): CliDeps {
     complete: (url, pending) => completeBrowserLogin(url, pending),
     refresh: (credential) => refreshCredential(credential),
     now: () => Date.now(),
+    showNextStep: true,
   };
 }
 
@@ -74,8 +77,12 @@ export async function runAuthCommand(args: readonly string[], overrides: Partial
         deps.out("   to copy. Get it from browser history: Cmd-Y (Mac) / Ctrl-H (PC), search \"welcome?code\",");
         deps.out("   right-click the Skylight result dated today (top of the list; older ones are earlier");
         deps.out("   sign-ins and will not work), Copy link address.\n");
-        deps.out("3. Run the same command you just ran, with `complete` instead of `login`,");
-        deps.out(`   and paste the URL at the prompt. This login expires in ${PENDING_LOGIN_TTL_MS / 60_000} minutes.`);
+        if (deps.showNextStep) {
+          deps.out("3. Run the same command you just ran, with `complete` instead of `login`,");
+          deps.out(`   and paste the URL at the prompt. This login expires in ${PENDING_LOGIN_TTL_MS / 60_000} minutes.`);
+        } else {
+          deps.out(`This login expires in ${PENDING_LOGIN_TTL_MS / 60_000} minutes.\n`);
+        }
         return 0;
       }
 
@@ -93,7 +100,7 @@ export async function runAuthCommand(args: readonly string[], overrides: Partial
         const credential = await deps.complete(url, pending);
         await deps.store.write(credential);
         deps.out(`Signed in. Credential saved (${deps.store.name}).`);
-        deps.out("Restart your MCP client to pick it up.");
+        if (deps.showNextStep) deps.out("Restart your MCP client to pick it up.");
         return 0;
       }
 

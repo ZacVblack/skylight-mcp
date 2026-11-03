@@ -41,13 +41,13 @@ export function defaultConfigDirectory(): string {
   return path.join(process.env.XDG_CONFIG_HOME ?? path.join(homedir(), ".config"), "skylight-mcp");
 }
 
-async function ensureDirectory(directory: string): Promise<void> {
+export async function ensureDirectory(directory: string): Promise<void> {
   await mkdir(directory, { recursive: true, mode: 0o700 });
   await chmod(directory, 0o700);
 }
 
 /** Write atomically with 0600 permissions. */
-async function writePrivateFile(destination: string, contents: string): Promise<void> {
+export async function writePrivateFile(destination: string, contents: string): Promise<void> {
   const temporary = `${destination}.${process.pid}.${randomBytes(6).toString("hex")}.tmp`;
   try {
     await writeFile(temporary, contents, { encoding: "utf8", mode: 0o600, flag: "wx" });

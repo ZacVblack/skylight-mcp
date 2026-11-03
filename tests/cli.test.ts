@@ -29,4 +29,22 @@ describe("cli smoke", () => {
     expect(await runAuthCommand(["status"], deps)).toBe(1);
     expect(await runAuthCommand(["bogus"], deps)).toBe(1);
   });
+
+  it("as a step inside init (showNextStep false) it does not say to restart the client yet", async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), "cli-"));
+    const out: string[] = [];
+    const store = createFileCredentialStore({ directory: dir });
+    const fetchImpl = (async () =>
+      new Response(JSON.stringify({ access_token: "test-a", refresh_token: "test-r", expires_in: 60 }), { status: 200 })) as unknown as typeof fetch;
+    const deps = {
+      store, out: (l: string) => out.push(l), showNextStep: false,
+      savePending: (p: any) => savePendingLogin(p, dir), takePending: () => takePendingLogin(dir),
+      complete: (u: string, p: any) => completeBrowserLogin(u, p, fetchImpl),
+    };
+    await runAuthCommand(["login"], deps);
+    const state = new URL(out.find((l) => l.includes("oauth/authorize"))!.trim()).searchParams.get("state");
+    expect(await runAuthCommand(["complete", `https://ourskylight.com/welcome?code=c&state=${state}`], deps)).toBe(0);
+    expect(out.join("\n")).toContain("Signed in.");
+    expect(out.join("\n")).not.toContain("Restart your MCP client");
+  });
 });
