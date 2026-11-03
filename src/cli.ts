@@ -100,7 +100,7 @@ export async function runAuthCommand(args: readonly string[], overrides: Partial
         const credential = await deps.complete(url, pending);
         await deps.store.write(credential);
         deps.out(`Signed in. Credential saved (${deps.store.name}).`);
-        deps.out("Restart your MCP client to pick it up.");
+        if (deps.showNextStep) deps.out("Restart your MCP client to pick it up.");
         return 0;
       }
 
