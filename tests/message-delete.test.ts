@@ -125,7 +125,8 @@ describe("delete_message", () => {
     const tools = ((await res.json()) as { result: { tools: Array<{ name: string; annotations?: { destructiveHint?: boolean } }> } }).result.tools;
     const destructive = tools.filter((t) => t.annotations?.destructiveHint).map((t) => t.name);
     expect(destructive).toContain("delete_message");
-    expect(destructive).not.toContain("delete_calendar_event");
+    expect(destructive).toContain("delete_calendar_event");
+    expect(destructive).not.toContain("delete_source_calendar");
     expect(tools.map((t) => t.name)).toContain("send_message");
   });
 

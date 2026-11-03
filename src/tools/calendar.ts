@@ -553,29 +553,71 @@ Returns: The updated event details.`,
   // delete_calendar_event tool
   server.tool(
     "delete_calendar_event",
-    `Delete a calendar event from Skylight.
+    `Delete one calendar event that was created in Skylight. Preview first, then confirm.
 
 Use this when:
 - Canceling an event: "Remove the dentist appointment"
-- Deleting old events: "Delete the meeting from yesterday"
+- Undoing an event this server created by mistake
 
 Parameters:
-- eventId (required): ID of the event to delete (from get_calendar_events)
+- eventId (required): ID of the event (from get_calendar_events)
+- date (required): the event's date, YYYY-MM-DD (used to find and show the event)
+- confirm: must be true to delete. Without it nothing is deleted and the event is shown.
 
-Note: This permanently removes the event. For recurring events, this may only delete one instance.`,
+Always show the user the preview and wait for a yes to that exact event before calling again with confirm: true.
+
+Refused, with the reason: events synced from Google or a subscribed feed (delete those at their source, or they come back), repeating events, and events that are not editable.`,
     {
       eventId: z.string().describe("ID of the event to delete"),
+      date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).describe("The event's date, YYYY-MM-DD"),
+      confirm: z.boolean().optional().default(false).describe("Must be true to delete; otherwise only a preview is returned"),
     },
-    async ({ eventId }) => {
+    async ({ eventId, date, confirm }) => {
       try {
+        const tz = getConfig().timezone;
+        const dayEvents = await getCalendarEvents({ dateMin: date, dateMax: date, timezone: tz });
+        const event = dayEvents.find((e) => String(e.id) === eventId);
+        if (!event) throw new Error(`No event with ID ${eventId} on ${date}. Nothing was deleted. Check the ID and date with get_calendar_events.`);
+
+        const a = event.attributes as Record<string, unknown>;
+        const title = String(a.summary ?? "(untitled)");
+        if (a.source !== "skylight") {
+          throw new Error(`"${title}" is synced from ${String(a.source ?? "another calendar")}, not created in Skylight. Deleting it here could fail or come back on the next sync. Delete it in its own calendar. Nothing was deleted.`);
+        }
+        if (a.recurring === true || a.recurring_config === true || a.master_event_id) {
+          throw new Error(`"${title}" is a repeating event, and what a delete does to the series is not verified. Nothing was deleted. Delete it in the Skylight app.`);
+        }
+        if (a.editable === false) throw new Error(`"${title}" is not editable. Nothing was deleted.`);
+
+        const labelById = new Map<string, string>();
+        try {
+          for (const c of await getCategories()) if (c.attributes.label) labelById.set(String(c.id), c.attributes.label);
+        } catch {
+          /* names are a best-effort extra */
+        }
+        const shown = formatEventForTool(event, labelById);
+
+        if (!confirm) {
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: `Preview only, nothing deleted. This would permanently delete:\n\n${shown}\n\nShow the user this event. If they say yes to exactly this one, call delete_calendar_event again with the same eventId and date and confirm: true.`,
+              },
+            ],
+          };
+        }
+
         await deleteCalendarEvent(eventId);
+        const check = await readBackUntil(
+          () => getCalendarEvents({ dateMin: date, dateMax: date, timezone: tz }),
+          (list) => !list.some((e) => String(e.id) === eventId)
+        );
+        if (!check.ok) {
+          throw new Error(`The delete was sent but "${title}" still shows on ${date}. Check the Skylight app before trying again.`);
+        }
         return {
-          content: [
-            {
-              type: "text" as const,
-              text: `Deleted calendar event (ID: ${eventId})`,
-            },
-          ],
+          content: [{ type: "text" as const, text: `Deleted "${title}" (ID: ${eventId}). Confirmed gone by reading ${date} back.` }],
         };
       } catch (error) {
         return {

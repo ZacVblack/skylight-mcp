@@ -18,6 +18,7 @@ import type { SkylightProps } from "./props.js";
 export const HOSTED_EFFECTS: readonly ToolEffect[] = ["read", "write"];
 export const HOSTED_DESTRUCTIVE_ALLOWLIST: readonly string[] = [
   "delete_message",
+  "delete_calendar_event",
   "delete_chore",
   "delete_list",
   "delete_list_item",

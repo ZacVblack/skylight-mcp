@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- `delete_calendar_event` is now preview-first and available on the hosted server. It takes the event's `date` as well as its ID, shows the event, and deletes only with `confirm: true`, then reads the day back to confirm it is gone. It refuses events synced from Google or a subscribed feed, repeating events and non-editable events, because what a delete does to those is unverified or would be undone by the next sync. **Breaking for callers of the old local tool:** `date` is now required and an unconfirmed call no longer deletes.
+
 ## [1.10.1] - 2026-11-03
 
 ### Fixed

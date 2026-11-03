@@ -303,8 +303,9 @@ encrypted in the OAuth grant, not in a database you manage.
 
 The hosted server registers all **read and create/update tools**, plus these
 deletes: `delete_chore`, `delete_list`, `delete_list_item`, `delete_reward`,
-`delete_recipe`, `delete_meal_sitting` and `delete_message`. It does **not**
-register `delete_calendar_event` or photo uploads. The local (stdio) server
+`delete_recipe`, `delete_meal_sitting`, `delete_message` and
+`delete_calendar_event` (Skylight-created, non-repeating events only). It does **not**
+register `delete_source_calendar` or photo uploads. The local (stdio) server
 registers everything. This is a deliberate choice, not a limitation of the Worker:
 
 - The hosted server is what Claude Duet drives proactively, sometimes
@@ -473,7 +474,7 @@ Messages are the notes shown on the frame (Skylight's web app calls them "nudges
 | `rename_source_calendar` | write | Rename a subscribed calendar feed as it appears in Skylight (feeds are named from the feed itself, often at length). Preview first, then `confirm: true`; reads it back and checks the linked profiles did not change. Feeds only (`kind: webcal`). |
 | `create_calendar_event` | write | Add an event. `profiles` assigns it to named family members. Local times are sent with the frame's UTC offset. |
 | `update_calendar_event` | write | Change an event, including who it is assigned to (`profiles`) |
-| `delete_calendar_event` | destructive | Delete an event. Local server only. |
+| `delete_calendar_event` | destructive | Delete one event created in Skylight. Needs the event's `date`; preview first, then `confirm: true`. Refuses events synced from Google or a feed, repeating events and non-editable events. Reads the day back to confirm it is gone. Also on the hosted server. |
 
 ### Chore Tools
 
