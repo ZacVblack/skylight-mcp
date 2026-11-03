@@ -3,6 +3,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { getAvatars, getColors } from "../api/endpoints/misc.js";
 import { attributesOf } from "../api/endpoints/shape.js";
 import { formatErrorForMcp } from "../utils/errors.js";
+import { formatAttribute } from "../utils/redact.js";
 
 export function registerMiscTools(server: McpServer): void {
   // get_avatars tool
@@ -37,7 +38,7 @@ Returns: List of available avatars with their IDs and details.`,
             const parts = [`- Avatar (ID: ${avatar.id})`];
             for (const [key, value] of Object.entries(avatar.attributes)) {
               if (value !== null && value !== undefined) {
-                parts.push(`  ${key}: ${value}`);
+                parts.push(`  ${key}: ${formatAttribute(key, value)}`);
               }
             }
             return parts.join("\n");
@@ -93,7 +94,7 @@ Returns: List of available colors with their IDs and hex values.`,
             const parts = [`- Color (ID: ${color.id})`];
             for (const [key, value] of Object.entries(attributesOf(color))) {
               if (value !== null && value !== undefined) {
-                parts.push(`  ${key}: ${value}`);
+                parts.push(`  ${key}: ${formatAttribute(key, value)}`);
               }
             }
             return parts.join("\n");

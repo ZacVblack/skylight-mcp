@@ -13,6 +13,7 @@ import {
 } from "../api/endpoints/rewards.js";
 import { resolveProfile, getCategories } from "../api/endpoints/categories.js";
 import { formatErrorForMcp } from "../utils/errors.js";
+import { formatAttribute } from "../utils/redact.js";
 
 export function registerRewardTools(server: McpServer): void {
   // get_rewards tool
@@ -56,7 +57,7 @@ Use this to answer:
             const attrs = reward.attributes;
             for (const [key, value] of Object.entries(attrs)) {
               if (value !== null && value !== undefined) {
-                parts.push(`  ${key}: ${value}`);
+                parts.push(`  ${key}: ${formatAttribute(key, value)}`);
               }
             }
 
@@ -126,7 +127,7 @@ Use this to answer:
             if (attrs.lifetime_points_earned != null) parts.push(`  Lifetime earned: ${attrs.lifetime_points_earned}`);
             for (const [key, value] of Object.entries(attrs)) {
               if (["category_id", "current_point_balance", "lifetime_points_earned"].includes(key)) continue;
-              if (value !== null && value !== undefined) parts.push(`  ${key}: ${value}`);
+              if (value !== null && value !== undefined) parts.push(`  ${key}: ${formatAttribute(key, value)}`);
             }
             return parts.join("\n");
           })

@@ -2,6 +2,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
 import { getAlbums } from "../api/endpoints/photos.js";
 import { formatErrorForMcp } from "../utils/errors.js";
+import { formatAttribute } from "../utils/redact.js";
 
 export function registerPhotoTools(server: McpServer): void {
   // get_albums tool
@@ -30,7 +31,7 @@ Returns: List of photo albums with their IDs.`,
             const parts = [`- ${album.attributes.name ?? "Untitled Album"} (ID: ${album.id})`];
             for (const [key, value] of Object.entries(album.attributes)) {
               if (value !== null && value !== undefined && key !== "name") {
-                parts.push(`  ${key}: ${value}`);
+                parts.push(`  ${key}: ${formatAttribute(key, value)}`);
               }
             }
             return parts.join("\n");

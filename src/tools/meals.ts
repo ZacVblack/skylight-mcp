@@ -24,6 +24,7 @@ import { parseDate, formatDateForDisplay, getTodayDate, getDateOffset } from "..
 import { addDays } from "../utils/schedule.js";
 import { formatErrorForMcp } from "../utils/errors.js";
 import { getConfig } from "../config.js";
+import { formatAttribute } from "../utils/redact.js";
 
 export function registerMealTools(server: McpServer): void {
   // get_meal_categories tool
@@ -125,7 +126,7 @@ Returns: Recipe details including description.`,
         const parts = [`Recipe: ${recipe.attributes.summary ?? "Untitled"}`];
         for (const [key, value] of Object.entries(recipe.attributes)) {
           if (value !== null && value !== undefined && key !== "summary") {
-            parts.push(`${key}: ${value}`);
+            parts.push(`${key}: ${formatAttribute(key, value)}`);
           }
         }
 

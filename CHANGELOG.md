@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.9.2] - 2026-11-03
+
+### Security
+- Feed-address redaction now covers every tool that prints raw attributes (avatars, colors, rewards, reward points, albums, devices, frame info, recipes, events), not only `get_source_calendars`. One shared formatter redacts strings, arrays and nested objects, so a subscription address cannot reach the transcript from a field nobody special-cased. Links a person wrote in free-text fields (description, location, note, summary) and Skylight's stock avatar images are kept.
+- `get_frame_info` no longer prints the notification email address.
+
 ## [1.9.1] - 2026-11-02
 
 ### Added

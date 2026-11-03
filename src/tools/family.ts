@@ -4,6 +4,7 @@ import { getFamilyMembers, getCategories } from "../api/endpoints/categories.js"
 import { getFrame } from "../api/endpoints/frames.js";
 import { getDevices } from "../api/endpoints/devices.js";
 import { formatErrorForMcp } from "../utils/errors.js";
+import { formatAttribute } from "../utils/redact.js";
 
 export function registerFamilyTools(server: McpServer): void {
   // get_family_members tool
@@ -122,8 +123,10 @@ Use this to answer:
         if (Object.keys(attrs).length > 0) {
           parts.push(`\nAttributes:`);
           for (const [key, value] of Object.entries(attrs)) {
+            // The notification address is personal data the tool has no use for.
+            if (key === "notification_email") continue;
             if (value !== null && value !== undefined) {
-              parts.push(`  ${key}: ${JSON.stringify(value)}`);
+              parts.push(`  ${key}: ${formatAttribute(key, value)}`);
             }
           }
         }
@@ -181,7 +184,7 @@ Use this to answer:
             const attrs = device.attributes;
             for (const [key, value] of Object.entries(attrs)) {
               if (value !== null && value !== undefined) {
-                parts.push(`  ${key}: ${value}`);
+                parts.push(`  ${key}: ${formatAttribute(key, value)}`);
               }
             }
 

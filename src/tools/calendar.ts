@@ -11,7 +11,7 @@ import {
 } from "../api/endpoints/calendar.js";
 import { getTodayDate, parseDate, formatDateForDisplay } from "../utils/dates.js";
 import { formatErrorForMcp } from "../utils/errors.js";
-import { redactFeedUrl } from "../utils/redact.js";
+import { formatAttribute } from "../utils/redact.js";
 import { getConfig } from "../config.js";
 import { getCategories, resolveProfileIds } from "../api/endpoints/categories.js";
 import type { CalendarEventResource } from "../api/types.js";
@@ -48,7 +48,7 @@ export function formatEventForTool(event: CalendarEventResource, labelById: Map<
   if (who.length) parts.push(`  profiles: ${who.join(", ")}`);
   for (const [key, value] of Object.entries(event.attributes)) {
     if (HIDDEN_EVENT_FIELDS.has(key)) continue;
-    if (value !== null && value !== undefined) parts.push(`  ${key}: ${value}`);
+    if (value !== null && value !== undefined) parts.push(`  ${key}: ${formatAttribute(key, value)}`);
   }
   return `- Event (ID: ${event.id})\n${parts.join("\n")}`;
 }
@@ -172,7 +172,7 @@ Returns a list of connected calendar sources (Google, iCloud, etc.).`,
             for (const [key, value] of Object.entries(attrs)) {
               if (value !== null && value !== undefined) {
                 // Feed URLs are bearer-like secrets; show only the host.
-                parts.push(`  ${key}: ${typeof value === "string" ? redactFeedUrl(value) : value}`);
+                parts.push(`  ${key}: ${formatAttribute(key, value)}`);
               }
             }
 
