@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { checkMealText } from "../utils/meal-text.js";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
 import {
@@ -487,6 +488,10 @@ Returns: What changed.`,
         }
         if (summary !== undefined && !summary.trim()) {
           return { content: [{ type: "text" as const, text: "summary cannot be empty." }], isError: true };
+        }
+        const textErrors = checkMealText({ summary, note, description }).errors;
+        if (textErrors.length) {
+          return { content: [{ type: "text" as const, text: `Nothing was changed. Fix these first:\n- ${textErrors.join("\n- ")}` }], isError: true };
         }
         const config = getConfig();
         const current = parseDate(date, config.timezone);

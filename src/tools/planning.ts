@@ -12,6 +12,7 @@
  */
 
 import { z } from "zod";
+import { checkMealText } from "../utils/meal-text.js";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { getCalendarEvents } from "../api/endpoints/calendar.js";
 import { getChores, isChoreDone } from "../api/endpoints/chores.js";
@@ -318,6 +319,17 @@ Parameters:
         }
         if (problems.length) return text(`Nothing written. Fix these first:\n- ${problems.join("\n- ")}`, true);
 
+        // Structural text checks: errors (placeholders) refuse a real write; warnings never block.
+        const textErrors: string[] = [];
+        const textWarnings: string[] = [];
+        for (const r of resolved) {
+          const found = checkMealText({ summary: r.summary, note: r.note, description: r.description });
+          const where = `${formatDay(r.date)} ${mealCategoryName(r.category)}`;
+          for (const e of found.errors) textErrors.push(`${where}: ${e}`);
+          for (const w of found.warnings) textWarnings.push(`${where}: ${w}`);
+        }
+        if (textErrors.length && !dryRun) return text(`Nothing written. Fix these first:\n- ${textErrors.join("\n- ")}`, true);
+
         const dates = resolved.map((r) => r.date).sort();
         const existing = await loadMeals(dates[0], dates[dates.length - 1]);
         const taken = existing?.byKey ?? new Map<string, string>();
@@ -365,7 +377,10 @@ Parameters:
           }
         }
         const head = dryRun ? "Dry run, nothing written:" : `Wrote ${written} of ${resolved.length}:`;
-        return text(`${head}\n${lines.join("\n")}`);
+        const checks: string[] = [];
+        if (textErrors.length) checks.push(`Text errors (a real write would be refused until fixed):\n- ${textErrors.join("\n- ")}`);
+        if (textWarnings.length) checks.push(`Text warnings (advice, not blocking):\n- ${textWarnings.join("\n- ")}`);
+        return text(`${head}\n${lines.join("\n")}${checks.length ? `\n\n${checks.join("\n\n")}` : ""}`);
       } catch (error) {
         return text(formatErrorForMcp(error), true);
       }
