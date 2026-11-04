@@ -154,7 +154,7 @@ export function registerTools(server: McpServer, options: RegisterToolsOptions):
     return (server.tool as (...args: unknown[]) => unknown)(name, ...rest, annotationsFor(effect), callback);
   }) as McpServer["tool"];
 
-  registerCalendarTools(filtered);
+  registerCalendarTools(filtered, allowed);
   registerChoreTools(filtered);
   registerListTools(filtered);
   registerTaskTools(filtered);

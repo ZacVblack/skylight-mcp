@@ -504,7 +504,7 @@ describe("get_source_calendars guidance", () => {
     const { readFileSync } = await import("node:fs");
     const { TOOL_EFFECTS } = await import("../src/tools/registry.js");
     const src = readFileSync(new URL("../src/tools/calendar.ts", import.meta.url), "utf8");
-    const block = src.slice(src.indexOf('"get_source_calendars"'), src.indexOf("Only feeds (kind: webcal) are one-way"));
+    const block = src.slice(src.indexOf("Name only the tools this server actually exposes"), src.indexOf("Only feeds (kind: webcal) are one-way"));
     const named = [...block.matchAll(/\b((?:update|rename|delete)_\w+)/g)].map((m) => m[1]!);
     expect(named).toHaveLength(3);
     expect(named.length).toBeGreaterThan(0);

@@ -54,7 +54,12 @@ export function formatEventForTool(event: CalendarEventResource, labelById: Map<
   return `- Event (ID: ${event.id})\n${parts.join("\n")}`;
 }
 
-export function registerCalendarTools(server: McpServer): void {
+function joinNames(names: string[]): string {
+  if (names.length <= 1) return names.join("");
+  return `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
+}
+
+export function registerCalendarTools(server: McpServer, available?: ReadonlySet<string>): void {
   // get_calendar_events tool
   server.tool(
     "get_calendar_events",
@@ -346,6 +351,9 @@ Get the ID from get_source_calendars. Feed addresses are never shown.`,
     }
   );
 
+  // Name only the tools this server actually exposes (the hosted server omits the feed-removal tool).
+  const manageTools = joinNames(["rename_source_calendar", "update_source_calendar_profiles", "delete_source_calendar"].filter((n) => !available || available.has(n)));
+
   // get_source_calendars tool
   server.tool(
     "get_source_calendars",
@@ -360,8 +368,7 @@ Returns a list of connected calendar sources (Google, iCloud, etc.).
 Ways to add a calendar in Skylight's "Sync Calendar" screen, and what this server can do:
 - Calendar URL (a subscription link: a team, school, league or iCloud published calendar):
   the user runs "skylight-mcp calendars add" in a terminal (the link is a secret, so it is
-  never typed into chat). Once added, rename_source_calendar, update_source_calendar_profiles
-  and delete_source_calendar manage it.
+  never typed into chat). Once added, ${manageTools} manage it.
 - Google, Outlook/Hotmail/Live, iCloud, Cozi, TeamSnap: the user signs in inside the Skylight
   app. Not possible here. Calendars added this way (kind: gmail) can be read but not removed here.
 - US Holidays and Individual Events: set up in the app (a built-in feed and local events).

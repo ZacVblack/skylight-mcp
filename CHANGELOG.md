@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- The hosted `get_source_calendars` description no longer tells the model that `delete_source_calendar` manages added feeds. That tool is local-only, so a hosted client went looking for a tool that is not there. The description now names only the feed tools the server actually registers; the local server is unchanged. A new test fails if any hosted tool description names a tool the hosted server does not expose.
+
 ## [1.11.0] - 2026-11-03
 
 ### Changed
