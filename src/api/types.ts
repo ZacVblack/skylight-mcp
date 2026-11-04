@@ -24,9 +24,13 @@ export interface CategoryAttributes {
 }
 
 export interface CategoryResource {
-  type: "category";
+  type: "category" | "category_detail";
   id: string;
   attributes: CategoryAttributes;
+  /** Present on the web app's category list (captured 2026-11-03): which feeds write to this label. */
+  relationships?: {
+    source_calendars?: { data: Array<{ id: string; type: string }> | null };
+  };
 }
 
 // Chore types

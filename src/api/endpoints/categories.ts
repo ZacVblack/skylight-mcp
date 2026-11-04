@@ -77,3 +77,26 @@ export async function resolveProfile(name: string): Promise<{ id: string; label:
   const { ids, labels } = await resolveProfileIds([name]);
   return { id: ids[0]!, label: labels[0]! };
 }
+
+/** A category that is a label (not a family member) and not written to by any feed. */
+export function labelDeleteRefusal(cat: CategoryResource): string | null {
+  if (cat.attributes.linked_to_profile) {
+    return `"${cat.attributes.label}" is a profile (a family member), not a label. Profiles are never deleted here; use the Skylight app.`;
+  }
+  const feeds = cat.relationships?.source_calendars?.data ?? [];
+  if (feeds.length > 0) {
+    return `"${cat.attributes.label}" is written to by a synced calendar, so deleting it would orphan or re-create its events on the next sync. Unlink the calendar in the Skylight app first.`;
+  }
+  return null;
+}
+
+/**
+ * Delete a calendar label. No capture of this request exists (the web app has
+ * no delete for labels); the path mirrors the other resources. The caller
+ * must have applied labelDeleteRefusal first.
+ */
+export async function deleteCategory(categoryId: string): Promise<void> {
+  if (!/^\d+$/.test(categoryId)) throw new Error("categoryId must be numeric.");
+  await getClient().request(`/api/frames/{frameId}/categories/${categoryId}`, { method: "DELETE" });
+  clearLookupCache();
+}

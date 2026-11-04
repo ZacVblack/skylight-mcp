@@ -20,6 +20,7 @@ import { registerMealTools } from "./meals.js";
 import { registerMessageTools } from "./messages.js";
 import { registerMiscTools } from "./misc.js";
 import { registerPhotoTools } from "./photos.js";
+import { registerLabelTools } from "./labels.js";
 import { registerPlanningTools } from "./planning.js";
 import { registerRewardTools } from "./rewards.js";
 import { registerTaskTools } from "./tasks.js";
@@ -66,6 +67,8 @@ export const TOOL_EFFECTS: Readonly<Record<string, ToolEffect>> = {
   get_colors: "read",
   get_frame_info: "read",
   get_devices: "read",
+  get_labels: "read",
+  delete_label: "destructive",
   // rewards (Plus)
   get_rewards: "read",
   get_reward_points: "read",
@@ -159,6 +162,7 @@ export function registerTools(server: McpServer, options: RegisterToolsOptions):
   registerListTools(filtered);
   registerTaskTools(filtered);
   registerFamilyTools(filtered);
+  registerLabelTools(filtered);
   registerMiscTools(filtered);
   registerMessageTools(filtered);
   // Planning tools degrade gracefully without Plus (meals are simply omitted),

@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- `get_labels` lists the calendar labels (categories that are not family members) with each one's upcoming-event count and whether a synced calendar writes to it. `delete_label` (local server only) deletes one, preview-first with `confirm: true`. Its preview lists the upcoming events that carry only this label, because Skylight removes those with the label (as the iOS app's own delete dialog states); events with a profile or another label stay and lose it. Refuses a profile or a feed-backed label even with confirm (deleting a feed-backed label would unsync the calendar). The web app has no label delete; the iOS app does. Verified live on one unused label.
 - `plan_week_meals` and `update_meal_sitting` check the meal text before writing. A placeholder left in a name, note or instructions (`(plan doc URL)`, `[recipe link]`, `<dessert name>`, `TBD`) refuses a real write with nothing written; a dry run lists it as an error. Advice that never blocks: a name over 25 characters (35 with a dessert), a dessert of more than two words, non-ASCII characters, and a cooking step in a note. Reason: these were the errors a human had to catch by reading drafts before the family's devices showed them.
 
 ### Fixed
