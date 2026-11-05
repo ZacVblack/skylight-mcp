@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Opt-in live test `tests/live/api-version.live.ts` (`LIVE_TAGS=contract`): fetches each read endpoint under the default `Skylight-Api-Version` and under the newer version the iOS app 2.31.0 sends, and reports key-path and type differences only (never values or ids). Reason: Skylight changes response shapes silently by version, and most reads still send the older default. The fingerprint helper (`tests/live/shape.ts`) is unit-tested, including that no input value can appear in its output.
+
 ## [1.12.0] - 2026-11-03
 
 ### Added

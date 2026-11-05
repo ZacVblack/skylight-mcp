@@ -31,7 +31,17 @@ LIVE_SKIP_TAGS=write   SKYLIGHT_LIVE=1 npm run test:live   # everything except w
 npm run test:live -- meals                                 # by file name
 ```
 
-Current tags: `read`, `smoke`, `contract`, `guards`, `write`, `meals`.
+Current tags: `read`, `smoke`, `contract`, `guards`, `write`, `meals`. `LIVE_TAGS=contract` includes the API-version shape comparison (read-only; prints key paths, never values).
+
+## Check a new suite registers
+
+A suite body runs when the file is loaded, before the live connection exists, so reading `ctx.today()`, `ctx.timezone`, `ctx.hasPlus` or `ctx.client()` outside an `it` or hook throws "Live connection is not ready". Mocked tests never load these files, so check it with no credentials:
+
+```sh
+env -u SKYLIGHT_LIVE npx vitest run --config vitest.live.config.ts
+```
+
+Every suite must report skipped, none failed.
 
 ## Add a test
 
