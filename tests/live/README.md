@@ -31,7 +31,7 @@ LIVE_SKIP_TAGS=write   SKYLIGHT_LIVE=1 npm run test:live   # everything except w
 npm run test:live -- meals                                 # by file name
 ```
 
-Current tags: `read`, `smoke`, `contract`, `guards`, `write`, `meals`. `LIVE_TAGS=contract` includes the API-version shape comparison (read-only; prints key paths, never values).
+Current tags: `read`, `smoke`, `contract`, `security`, `guards`, `write`, `meals`. `LIVE_TAGS=security` runs the redaction scan: every read tool against the real account, reporting tool name, kind and count of secret-shaped output, never values. `LIVE_TAGS=contract` includes the API-version shape comparison (read-only; prints key paths, never values).
 
 ## Check a new suite registers
 

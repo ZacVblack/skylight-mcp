@@ -24,6 +24,7 @@ import { registerLabelTools } from "./labels.js";
 import { registerPlanningTools } from "./planning.js";
 import { registerRewardTools } from "./rewards.js";
 import { registerTaskTools } from "./tasks.js";
+import { getDefaultWriteGuard, logWrite, refusalResult, type WriteGuard } from "../utils/write-guard.js";
 
 /**
  * read: no change to Skylight data.
@@ -112,6 +113,8 @@ export interface RegisterToolsOptions {
   include?: readonly string[];
   /** Register the photo tools (uploads). Default: true when hasPlus. */
   photos?: boolean;
+  /** Rate backstop for non-read tools. Default: the process-wide guard. Tests pass their own. */
+  writeGuard?: WriteGuard;
 }
 
 export function annotationsFor(effect: ToolEffect): ToolAnnotations {
@@ -132,6 +135,34 @@ export function selectedTools(options: RegisterToolsOptions): string[] {
     .map(([name]) => name);
 }
 
+type ToolCallback = (...args: unknown[]) => unknown;
+
+/**
+ * Wrap a non-read tool so each call is rate-checked and logged (see
+ * utils/write-guard.ts). Read tools are returned untouched. A refusal returns an
+ * MCP error result without calling the tool, so nothing is changed.
+ */
+function guardedCallback(name: string, effect: ToolEffect, callback: unknown, guard: WriteGuard): unknown {
+  if (effect === "read") return callback;
+  const inner = callback as ToolCallback;
+  return async (...args: unknown[]) => {
+    const verdict = guard.admit(effect);
+    if (!verdict.ok) {
+      logWrite(name, effect, "refused", guard.recent());
+      return refusalResult(verdict.reason, verdict.retryAfterSeconds);
+    }
+    try {
+      const result = await inner(...args);
+      const failed = typeof result === "object" && result !== null && (result as { isError?: boolean }).isError === true;
+      logWrite(name, effect, failed ? "tool_error" : "ok", guard.recent());
+      return result;
+    } catch (error) {
+      logWrite(name, effect, "threw", guard.recent());
+      throw error;
+    }
+  };
+}
+
 /**
  * Register the Skylight tools on `server`, filtered by effect, with MCP
  * annotations derived from the classification above.
@@ -139,6 +170,7 @@ export function selectedTools(options: RegisterToolsOptions): string[] {
 export function registerTools(server: McpServer, options: RegisterToolsOptions): string[] {
   const allowed = new Set(selectedTools(options));
   const registered: string[] = [];
+  const guard = options.writeGuard ?? getDefaultWriteGuard();
 
   // Intercept server.tool() so the per-domain register functions stay as they
   // are: the registry decides what gets through and attaches annotations.
@@ -152,7 +184,7 @@ export function registerTools(server: McpServer, options: RegisterToolsOptions):
       return undefined as never;
     }
     registered.push(name);
-    const callback = rest.pop();
+    const callback = guardedCallback(name, effect, rest.pop(), guard);
     // Insert annotations before the callback: tool(name, description?, schema?, annotations, cb)
     return (server.tool as (...args: unknown[]) => unknown)(name, ...rest, annotationsFor(effect), callback);
   }) as McpServer["tool"];

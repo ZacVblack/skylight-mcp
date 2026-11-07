@@ -15,7 +15,10 @@ secrets and never commit them:
   calendars, such as a published iCloud calendar or a team schedule). Anyone
   holding the link can read that calendar. Every tool that prints raw
   attributes passes them through one shared redactor, so only the host is shown;
-  do not paste the full address anywhere
+  do not paste the full address anywhere. An opt-in live test (`LIVE_TAGS=security`) runs every
+  read tool against your real account and reports only tool name, kind and count of anything
+  shaped like a secret. Links in text a person wrote (descriptions, notes, locations) are kept by
+  design, so a feed address pasted into an event description is not redacted
   `skylight-mcp calendars add` takes a new address through a hidden prompt only. It is
   refused as an argument, never sent to a tool, and removed from any error text.
 
@@ -53,7 +56,17 @@ secrets and never commit them:
   `vars` entry in `wrangler.jsonc`.
 - The Worker stores Skylight tokens only inside OAuth grant props, which
   workers-oauth-provider encrypts; it keeps no plaintext credential anywhere.
-- The hosted tool set excludes every `delete_*` tool and photo uploads.
+- The hosted tool set excludes photo uploads and every `delete_*` tool except an explicit
+  allowlist (`HOSTED_DESTRUCTIVE_ALLOWLIST` in `src/worker/mcp.ts`). Each allowlisted delete is
+  preview-first and needs `confirm: true`. `delete_source_calendar` and `delete_label` are local-only.
+- **Change limit and log.** Every non-read tool call counts against a per-process limit (60 changes
+  and 10 deletes per hour, previews and failures included). Over the limit the call is refused and
+  nothing is changed. Each attempt logs one line to stderr: tool name, effect and outcome, never
+  arguments, text or ids. Limits of this control: the count is in memory per process, so on the
+  Worker it is per isolate and resets when an isolate restarts. It stops a tight loop; it is not an
+  exact quota and not an authentication control. Cloudflare logs must be enabled to keep the lines.
+- The setup passphrase form has no attempt limit in code. Use a long random passphrase, and add a
+  Cloudflare rate-limiting rule on `/authorize` if the Worker URL is widely known.
 - Anyone who finds the URL can reach the consent page but cannot link an
   account without the passphrase, and a linked account only ever grants
   access to the Skylight account whose sign-in was pasted.
