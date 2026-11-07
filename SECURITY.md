@@ -65,8 +65,13 @@ secrets and never commit them:
   arguments, text or ids. Limits of this control: the count is in memory per process, so on the
   Worker it is per isolate and resets when an isolate restarts. It stops a tight loop; it is not an
   exact quota and not an authentication control. Cloudflare logs must be enabled to keep the lines.
-- The setup passphrase form has no attempt limit in code. Use a long random passphrase, and add a
-  Cloudflare rate-limiting rule on `/authorize` if the Worker URL is widely known.
+- The setup passphrase form has no attempt limit in code. Use a long random passphrase (20+
+  characters from a password manager; the code enforces 12 as a floor). A Cloudflare WAF
+  rate-limiting rule does not help here: those rules belong to a zone you own, and the Worker is
+  served from `workers.dev` with no zone. Options if you need an attempt limit: a Workers
+  rate-limiting binding called from the passphrase step (code change, approximate and per
+  location), or a custom domain on your own zone plus a WAF rule. Not built: the passphrase only
+  lets someone link their own Skylight account through your Worker, and does not expose your data.
 - Anyone who finds the URL can reach the consent page but cannot link an
   account without the passphrase, and a linked account only ever grants
   access to the Skylight account whose sign-in was pasted.

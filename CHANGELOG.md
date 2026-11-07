@@ -7,10 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.13.0] - 2026-11-06
+
 ### Added
 - Change limit and change log for every write and delete tool, on the local and hosted servers. At most 60 changes and 10 deletes per process per hour (previews and failures count); over the limit the call is refused with nothing changed. Each attempt logs one stderr line with the tool name, effect and outcome, never arguments or ids. Reason: the per-call guards (preview, confirm, allowlist) cannot see a loop, and an unattended assistant on a shared family display needed a backstop. The count is per process (per Worker isolate), so it stops a tight loop and is not an exact quota.
 - Opt-in live test `tests/live/redaction.live.ts` (`LIVE_TAGS=security`): runs every read tool against the real account and fails on anything shaped like a secret, reporting only tool name, kind and count. The scanner (`tests/live/leak-scan.ts`) is unit-tested, including that no input text can appear in its output. Reason: the mocked redaction tests use invented data.
 - Opt-in live test `tests/live/api-version.live.ts` (`LIVE_TAGS=contract`): fetches each read endpoint under the default `Skylight-Api-Version` and under the newer version the iOS app 2.31.0 sends, and reports key-path and type differences only (never values or ids). Reason: Skylight changes response shapes silently by version, and most reads still send the older default. The fingerprint helper (`tests/live/shape.ts`) is unit-tested, including that no input value can appear in its output.
+
+### Changed
+- SECURITY.md no longer recommends a Cloudflare WAF rate-limit rule on `/authorize`: those rules need a zone you own and the Worker runs on `workers.dev`. It now lists the options that do apply and says why none is built.
 
 ## [1.12.0] - 2026-11-03
 
