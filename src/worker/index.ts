@@ -30,11 +30,14 @@ import {
   type PendingLogin,
 } from "../api/oauth.js";
 import { HOSTED_EFFECTS, handleMcpRequest } from "./mcp.js";
+import type { LimiterNamespace } from "./limiter.js";
 import { consentPage, errorPage, html, landingPage, pastePage, setupPage, versionResponse } from "./pages.js";
 import { accessTokenTtlSeconds, isSkylightProps, toCredential, withCredential, type SkylightProps } from "./props.js";
 
 export interface Env {
   OAUTH_KV: KVNamespace;
+  /** Durable Object namespace for the change counter. Optional so an older config still starts; see limiter.ts. */
+  WRITE_LIMITER?: LimiterNamespace;
   /** Public origin of this Worker, e.g. https://skylight-mcp.example.workers.dev */
   WORKER_URL: string;
   /** Secret. Required on the consent page before anyone can link a Skylight account. */
@@ -42,8 +45,11 @@ export interface Env {
   DEFAULT_TIMEZONE?: string;
 }
 
+// The Durable Object class must be exported from the Worker entry point for the binding to find it.
+export { WriteLimiter } from "./write-limiter.js";
+
 const SCOPE = "skylight";
-const VERSION = "1.13.0";
+const VERSION = "1.13.1";
 
 interface UpstreamData {
   codeVerifier: string;
@@ -110,14 +116,14 @@ export function getServers(env: Env): Servers {
     requiredScopes: [SCOPE],
     validateToken: (env) => (resourceId, token) => auth.validateToken<SkylightProps>(resourceId, token, env),
     handler: {
-      fetch(request, _env, ctx) {
+      fetch(request, env, ctx) {
         if (!ctx.auth.scope.includes(SCOPE)) {
           return new Response("insufficient_scope", { status: 403 });
         }
         if (!isSkylightProps(ctx.props)) {
           return new Response("Grant is missing its Skylight credential; reconnect.", { status: 401 });
         }
-        return handleMcpRequest(request, ctx.props, VERSION);
+        return handleMcpRequest(request, ctx.props, VERSION, env);
       },
     },
   });

@@ -1,6 +1,7 @@
 /**
  * One MCP request = one fresh McpServer bound to the grant's Skylight
- * credential. Stateless Streamable HTTP: no sessions, no Durable Objects.
+ * credential. Stateless Streamable HTTP: no sessions. The only Durable Object is
+ * the change counter (write-limiter.ts), reached through a per-request guard.
  */
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -8,6 +9,7 @@ import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/
 import { SkylightClient } from "../api/client.js";
 import { runWithContext } from "../context.js";
 import { registerTools, type ToolEffect } from "../tools/registry.js";
+import { guardForRequest, type LimiterNamespace } from "./limiter.js";
 import type { SkylightProps } from "./props.js";
 
 /**
@@ -27,12 +29,23 @@ export const HOSTED_DESTRUCTIVE_ALLOWLIST: readonly string[] = [
   "delete_meal_sitting",
 ];
 
-export async function handleMcpRequest(request: Request, props: SkylightProps, version: string): Promise<Response> {
+export async function handleMcpRequest(
+  request: Request,
+  props: SkylightProps,
+  version: string,
+  env: { WRITE_LIMITER?: LimiterNamespace } = {}
+): Promise<Response> {
   const config = { frameId: props.frameId, timezone: props.timezone, token: props.accessToken, authType: "bearer" as const };
   const client = new SkylightClient(config, null);
 
   const server = new McpServer({ name: "skylight", version });
-  registerTools(server, { hasPlus: props.hasPlus, effects: HOSTED_EFFECTS, include: HOSTED_DESTRUCTIVE_ALLOWLIST, photos: false });
+  registerTools(server, {
+    hasPlus: props.hasPlus,
+    effects: HOSTED_EFFECTS,
+    include: HOSTED_DESTRUCTIVE_ALLOWLIST,
+    photos: false,
+    writeGuard: guardForRequest(env.WRITE_LIMITER, props.frameId),
+  });
 
   const transport = new WebStandardStreamableHTTPServerTransport({
     sessionIdGenerator: undefined, // stateless

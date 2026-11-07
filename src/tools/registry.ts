@@ -24,7 +24,7 @@ import { registerLabelTools } from "./labels.js";
 import { registerPlanningTools } from "./planning.js";
 import { registerRewardTools } from "./rewards.js";
 import { registerTaskTools } from "./tasks.js";
-import { getDefaultWriteGuard, logWrite, refusalResult, type WriteGuard } from "../utils/write-guard.js";
+import { getDefaultWriteGuard, logWrite, refusalResult, type WriteGuardLike } from "../utils/write-guard.js";
 
 /**
  * read: no change to Skylight data.
@@ -114,7 +114,7 @@ export interface RegisterToolsOptions {
   /** Register the photo tools (uploads). Default: true when hasPlus. */
   photos?: boolean;
   /** Rate backstop for non-read tools. Default: the process-wide guard. Tests pass their own. */
-  writeGuard?: WriteGuard;
+  writeGuard?: WriteGuardLike;
 }
 
 export function annotationsFor(effect: ToolEffect): ToolAnnotations {
@@ -142,22 +142,22 @@ type ToolCallback = (...args: unknown[]) => unknown;
  * utils/write-guard.ts). Read tools are returned untouched. A refusal returns an
  * MCP error result without calling the tool, so nothing is changed.
  */
-function guardedCallback(name: string, effect: ToolEffect, callback: unknown, guard: WriteGuard): unknown {
+function guardedCallback(name: string, effect: ToolEffect, callback: unknown, guard: WriteGuardLike): unknown {
   if (effect === "read") return callback;
   const inner = callback as ToolCallback;
   return async (...args: unknown[]) => {
-    const verdict = guard.admit(effect);
+    const verdict = await guard.admit(effect);
     if (!verdict.ok) {
-      logWrite(name, effect, "refused", guard.recent());
-      return refusalResult(verdict.reason, verdict.retryAfterSeconds);
+      logWrite(name, effect, verdict.limiterError ? "limiter_error" : "refused", verdict.recent, guard.kind);
+      return refusalResult(verdict.reason, verdict.retryAfterSeconds, verdict.limiterError === true);
     }
     try {
       const result = await inner(...args);
       const failed = typeof result === "object" && result !== null && (result as { isError?: boolean }).isError === true;
-      logWrite(name, effect, failed ? "tool_error" : "ok", guard.recent());
+      logWrite(name, effect, failed ? "tool_error" : "ok", verdict.recent, guard.kind);
       return result;
     } catch (error) {
-      logWrite(name, effect, "threw", guard.recent());
+      logWrite(name, effect, "threw", verdict.recent, guard.kind);
       throw error;
     }
   };

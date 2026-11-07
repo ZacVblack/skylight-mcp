@@ -343,6 +343,18 @@ placeholder, so nothing account-specific can be committed), asks you for a
 sign-in passphrase, deploys, sets `WORKER_URL`, deploys again and prints the
 connector URL. Re-deploy later with `npm run worker:deploy:local`.
 
+**Upgrading a Worker deployed before 1.13.1:** add the change counter to your
+`wrangler.local.jsonc` (a new setup gets it automatically), then deploy:
+
+```jsonc
+"durable_objects": { "bindings": [{ "name": "WRITE_LIMITER", "class_name": "WriteLimiter" }] },
+"migrations": [{ "tag": "v1-write-limiter", "new_sqlite_classes": ["WriteLimiter"] }],
+```
+
+Without it the Worker still runs, but its change limit counts in memory and
+limits nothing across requests. After a deploy, make a change and look for
+`"limiter":"durable"` in the Worker's logs.
+
 Doing it by hand instead:
 
 ```bash

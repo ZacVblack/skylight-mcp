@@ -112,7 +112,8 @@ describe("write guard in the tool registry", () => {
     vi.restoreAllMocks();
     const changes = lines.filter((l) => l.includes("skylight_change")).map((l) => JSON.parse(l.slice(l.indexOf("{"))));
     expect(changes.map((c) => c.outcome)).toEqual(["ok", "refused"]);
-    expect(changes[0]).toMatchObject({ tool: "create_list", effect: "write" });
+    expect(changes[0]).toMatchObject({ tool: "create_list", effect: "write", limiter: "memory" });
+    expect(changes[1]).toMatchObject({ outcome: "refused", limiter: "memory" });
     expect(lines.join("\n")).not.toContain("SECRET-LIST-NAME");
   });
 });

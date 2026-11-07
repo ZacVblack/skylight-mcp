@@ -59,12 +59,19 @@ secrets and never commit them:
 - The hosted tool set excludes photo uploads and every `delete_*` tool except an explicit
   allowlist (`HOSTED_DESTRUCTIVE_ALLOWLIST` in `src/worker/mcp.ts`). Each allowlisted delete is
   preview-first and needs `confirm: true`. `delete_source_calendar` and `delete_label` are local-only.
-- **Change limit and log.** Every non-read tool call counts against a per-process limit (60 changes
-  and 10 deletes per hour, previews and failures included). Over the limit the call is refused and
-  nothing is changed. Each attempt logs one line to stderr: tool name, effect and outcome, never
-  arguments, text or ids. Limits of this control: the count is in memory per process, so on the
-  Worker it is per isolate and resets when an isolate restarts. It stops a tight loop; it is not an
-  exact quota and not an authentication control. Cloudflare logs must be enabled to keep the lines.
+- **Change limit and log.** Every non-read tool call counts against a limit of 60 changes and 10
+  deletes per hour (previews and failures included). Over the limit the call is refused and nothing
+  is changed. Each attempt logs one line to stderr: tool name, effect, outcome, the running count
+  and where it is counted (`limiter`), never arguments, text or ids. On the hosted Worker the count
+  lives in a Durable Object (`WRITE_LIMITER`, one per Skylight frame), so it persists across
+  requests and restarts and is exact under concurrent calls. If the Durable Object cannot be
+  reached, the change is refused: a safety control that is down does not become permission.
+  Limits of this control: it is a backstop against a runaway loop, not an authentication control
+  and not a billing quota. A Worker deployed with a config from before 1.13.1 has no
+  `WRITE_LIMITER` binding; it still runs, but counts in memory, which does not limit across
+  requests (version 1.13.0 shipped that way and the limit never applied on the Worker). Such a
+  Worker says `"limiter":"memory"` in every log line. Check for `"limiter":"durable"` and a count
+  that rises (1, 2, 3) after you deploy. Cloudflare logs must be enabled to keep the lines.
 - The setup passphrase form has no attempt limit in code. Use a long random passphrase (20+
   characters from a password manager; the code enforces 12 as a floor). A Cloudflare WAF
   rate-limiting rule does not help here: those rules belong to a zone you own, and the Worker is

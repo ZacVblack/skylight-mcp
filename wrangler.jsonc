@@ -11,6 +11,12 @@
     // Create with: npx wrangler kv namespace create OAUTH_KV   (then paste the id here)
     { "binding": "OAUTH_KV", "id": "REPLACE_WITH_KV_NAMESPACE_ID" }
   ],
+  // The change counter (60 changes and 10 deletes per hour per frame). Without this
+  // binding the Worker still runs but counts in memory, which limits nothing across requests.
+  "durable_objects": {
+    "bindings": [{ "name": "WRITE_LIMITER", "class_name": "WriteLimiter" }]
+  },
+  "migrations": [{ "tag": "v1-write-limiter", "new_sqlite_classes": ["WriteLimiter"] }],
   "vars": {
     "DEFAULT_TIMEZONE": "America/Los_Angeles"
   }

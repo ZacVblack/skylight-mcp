@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.13.1] - 2026-11-06
+
+### Fixed
+- The change limit now works on the hosted Worker. In 1.13.0 the count lived in module memory and the Worker did not carry it from one request to the next: three calls a few seconds apart each logged a count of 1, so the 60-changes and 10-deletes-per-hour limit never applied there (it was never checked live before release, and the mocked tests ran in one long-lived Node process). The count is now kept in a Durable Object, one per Skylight frame. Checked in the real Workers runtime locally: counts rise 1, 2, 3, 4; 80 concurrent calls admit exactly 60; the count survives a restart; frames are independent; deletes stop at 10. The local stdio server is unchanged.
+- If the Durable Object cannot be reached, the change is refused with nothing changed (logged as `limiter_error`).
+
+### Changed
+- Every change log line now includes `limiter`: `"durable"` (counted across requests) or `"memory"` (this process only). A Worker without the new binding still runs, but says `"memory"` and does not limit across requests.
+- **Existing hosted deployments:** add the `WRITE_LIMITER` Durable Object binding and migration to your `wrangler.local.jsonc` and redeploy; see the README. New `worker:setup` runs include it.
+- Docs: the 1.13.0 note below that the count "stops a tight loop" per isolate was wrong for the Worker; SECURITY.md now describes the real behaviour.
+
 ## [1.13.0] - 2026-11-06
 
 ### Added
