@@ -49,7 +49,7 @@ export interface Env {
 export { WriteLimiter } from "./write-limiter.js";
 
 const SCOPE = "skylight";
-const VERSION = "1.13.1";
+const VERSION = "1.14.0";
 
 interface UpstreamData {
   codeVerifier: string;
