@@ -14,6 +14,7 @@ import { formatErrorForMcp } from "../utils/errors.js";
 import { formatAttribute, redactFeedUrl } from "../utils/redact.js";
 import { checkCalendarName, readBackUntil, removeSourceCalendar, renameSourceCalendar, setSourceCalendarCategories } from "../api/endpoints/source-calendars.js";
 import { getConfig } from "../config.js";
+import { RepeatError, planRepeat } from "../utils/recurrence.js";
 import { getCategories, resolveProfileIds } from "../api/endpoints/categories.js";
 import type { CalendarEventResource } from "../api/types.js";
 
@@ -472,6 +473,10 @@ Parameters:
 - description: Additional notes for the event
 - location: Where the event takes place
 - profiles: Profile names to assign (e.g. ["Alex"]); categoryIds is the ID fallback
+- repeat: makes a repeating series. { frequency: "daily" | "weekly", interval (weekly 1-4, daily 1-7), byDay (weekly; must be the weekday of startsAt), and exactly one of until (YYYY-MM-DD, inclusive) or count }. Max 104 occurrences and 2 years; no open-ended series; no monthly or yearly yet.
+- confirm: required for a series. Without confirm: true a series is NOT created; you get a preview listing every date. Show it to the person, get their yes, then call again with confirm: true.
+
+REPEATING SERIES: give startsAt/endsAt as local times with no offset; all-day and more than one profile are refused. The series is created on Skylight's own calendar (verified live 2026-11-08): it shows on the Skylight displays and app, and is NOT written to Google, so people who only use Google Calendar will not see it. This tool does not check conflicts: call find_conflicts over the series dates first. To undo a series, delete_calendar_event with scope "all".
 
 Returns: The created event details.
 
@@ -485,12 +490,58 @@ Related: get_family_members lists the profile names and IDs.`,
       location: z.string().optional().describe("Event location"),
       profiles: z.array(z.string()).optional().describe("Profile names to assign, e.g. [\"Alex\", \"Jordan\"] (see get_family_members)."),
       categoryIds: z.array(z.string()).optional().describe("Profile IDs to assign. Prefer profiles."),
+      repeat: z
+        .object({
+          frequency: z.enum(["daily", "weekly"]),
+          interval: z.number().int().optional(),
+          byDay: z.enum(["SU", "MO", "TU", "WE", "TH", "FR", "SA"]).optional(),
+          until: z.string().optional().describe("Last date, YYYY-MM-DD, inclusive"),
+          count: z.number().int().optional().describe("Number of occurrences"),
+        })
+        .strict()
+        .optional()
+        .describe("Make this a repeating series (see the tool description)."),
+      confirm: z.boolean().optional().describe("Series only: must be true to create; otherwise a preview is returned."),
     },
-    async ({ summary, startsAt, endsAt, allDay, description, location, profiles, categoryIds }) => {
+    async ({ summary, startsAt, endsAt, allDay, description, location, profiles, categoryIds, repeat, confirm }) => {
       try {
         const config = getConfig();
         if (profiles?.length && categoryIds?.length) throw new Error("Give profiles or categoryIds, not both.");
         const resolved = profiles?.length ? (await resolveProfileIds(profiles)).ids : categoryIds;
+        let rrule: string[] | undefined;
+        if (repeat) {
+          if (allDay) throw new RepeatError("All-day repeating events are not supported yet; use the Skylight app.");
+          if ((resolved?.length ?? 0) > 1) throw new RepeatError("A repeating series with more than one profile is not supported yet; give one profile or none.");
+          const m = /^(\d{4}-\d{2}-\d{2})[T ](\d{2}:\d{2})(?::\d{2})?$/.exec(startsAt.trim());
+          if (!m) throw new RepeatError("For a repeating event give startsAt as local time YYYY-MM-DDTHH:MM with no offset or Z.");
+          const startMs = Date.parse(withFrameOffset(startsAt, config.timezone));
+          const endMs = Date.parse(withFrameOffset(endsAt, config.timezone));
+          if (Number.isNaN(endMs) || !/^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(?::\d{2})?$/.test(endsAt.trim())) {
+            throw new RepeatError("For a repeating event give endsAt as local time YYYY-MM-DDTHH:MM with no offset or Z.");
+          }
+          const plan = planRepeat(repeat, m[1]!, m[2]!, endMs <= startMs, config.timezone, Date.now());
+          rrule = [plan.rrule];
+          if (confirm !== true) {
+            const dates = plan.occurrences.map((o) => o.date);
+            return {
+              content: [
+                {
+                  type: "text" as const,
+                  text: [
+                    `PREVIEW, nothing created. "${summary}" would repeat ${repeat.frequency} (every ${repeat.interval ?? 1}), ${dates.length} occurrence${dates.length === 1 ? "" : "s"}, ${startsAt.trim().slice(11, 16)} to ${endsAt.trim().slice(11, 16)} (${config.timezone}).`,
+                    `Dates: ${dates.join(", ")}`,
+                    profiles?.length ? `Profile: ${profiles.join(", ")}` : "Profile: none",
+                    "Goes to Skylight's own calendar: it shows on the Skylight displays and app and is not written to Google.",
+                    "Conflicts were not checked by this tool; run find_conflicts over these dates first.",
+                    "To create it, show this to the person and call again with the same arguments and confirm: true. To undo later: delete_calendar_event with scope \"all\".",
+                  ].join("\n"),
+                },
+              ],
+            };
+          }
+        } else if (confirm !== undefined) {
+          throw new Error("confirm applies to repeating series only.");
+        }
         const event = await createCalendarEvent({
           summary,
           starts_at: withFrameOffset(startsAt, config.timezone),
@@ -501,13 +552,16 @@ Related: get_family_members lists the profile names and IDs.`,
           category_ids: resolved,
           timezone: config.timezone,
           kind: "standard",
+          ...(rrule ? { rrule } : {}),
         });
 
         return {
           content: [
             {
               type: "text" as const,
-              text: `Created calendar event "${summary}" (ID: ${event.id})`,
+              text: rrule
+                ? `Created repeating series "${summary}" (ID: ${event.id}, rule ${rrule[0]}). Read it back with get_calendar_events before telling anyone it is done.`
+                : `Created calendar event "${summary}" (ID: ${event.id})`,
             },
           ],
         };
