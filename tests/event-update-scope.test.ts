@@ -131,8 +131,6 @@ describe("update_calendar_event on repeating events (scope)", () => {
   });
 
   it.each([
-    ["startsAt", { startsAt: "2026-11-12T19:00:00" }],
-    ["endsAt", { endsAt: "2026-11-12T20:00:00" }],
     ["allDay", { allDay: true }],
     ["description", { description: "bring water" }],
     ["location", { location: "Field 2" }],
@@ -142,6 +140,43 @@ describe("update_calendar_event on repeating events (scope)", () => {
     expect(out.isError).toBe(true);
     expect(out.text).toContain("not verified");
     expect(s.puts).toEqual([]);
+  });
+
+  describe("time of day on a series", () => {
+    it("scope all: sends starts_at, ends_at (with offset) and timezone with apply_to and the current profiles", async () => {
+      const s = stub([ev(SERIES_ID)]);
+      const out = await call("update_calendar_event", { eventId: SERIES_ID, date, scope: "all", startsAt: "2026-11-12T19:00", endsAt: "2026-11-12T20:00" });
+      expect(out.isError).toBe(false);
+      expect(s.puts).toHaveLength(1);
+      expect(s.puts[0]!.body).toEqual({
+        category_ids: ["11", "13"],
+        starts_at: "2026-11-12T19:00:00.000+00:00",
+        ends_at: "2026-11-12T20:00:00.000+00:00",
+        timezone: "UTC",
+        apply_to: "all",
+      });
+    });
+
+    it("scope one: sends the same time fields with apply_to one (not verified live)", async () => {
+      const s = stub([ev(SERIES_ID)]);
+      const out = await call("update_calendar_event", { eventId: SERIES_ID, date, scope: "one", startsAt: "2026-11-12T19:00", endsAt: "2026-11-12T20:00" });
+      expect(out.isError).toBe(false);
+      expect(s.puts).toHaveLength(1);
+      expect(s.puts[0]!.body).toMatchObject({ starts_at: "2026-11-12T19:00:00.000+00:00", ends_at: "2026-11-12T20:00:00.000+00:00", timezone: "UTC", apply_to: "one" });
+    });
+
+    it.each([
+      ["only startsAt", { startsAt: "2026-11-12T19:00" }],
+      ["only endsAt", { endsAt: "2026-11-12T20:00" }],
+      ["a different date", { startsAt: "2026-11-13T19:00", endsAt: "2026-11-13T20:00" }],
+      ["an offset", { startsAt: "2026-11-12T19:00:00-08:00", endsAt: "2026-11-12T20:00:00-08:00" }],
+      ["end before start", { startsAt: "2026-11-12T19:00", endsAt: "2026-11-12T18:00" }],
+    ])("refuses %s and sends no PUT", async (_n, extra) => {
+      const s = stub([ev(SERIES_ID)]);
+      const out = await call("update_calendar_event", { eventId: SERIES_ID, date, scope: "all", ...extra });
+      expect(out.isError).toBe(true);
+      expect(s.puts).toEqual([]);
+    });
   });
 
   it("refuses a scope on a one-off event, and sends no PUT", async () => {

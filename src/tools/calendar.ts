@@ -596,7 +596,7 @@ Parameters:
 REPEATING EVENTS (the id looks like 12345-1804032000): also give
 - date (required): the occurrence's date, YYYY-MM-DD, from get_calendar_events
 - scope (required): "one" changes only that occurrence (it becomes its own event, detached from the series); "all" changes the whole series AND overwrites any earlier edit made to a single occurrence. There is no "future" scope: Skylight's API refuses it, so do not offer it.
-For a repeating event only the title (summary) and the family member assignment can be changed here; time, notes and location edits on a series have not been verified, so make those in the Skylight app.
+For a repeating event only the title (summary), the family member assignment and the time of day (startsAt and endsAt, both on the occurrence's date) can be changed here; notes, location and all-day edits on a series have not been verified, so make those in the Skylight app. A time change with scope "all" is verified live (every occurrence moved, still one series; occurrence ids change because they embed the start time, so re-read before the next call). A time change with scope "one" has not been tried live.
 Events on a Google calendar are updated at Google too, for everyone who shares that calendar.
 
 Returns: The updated event details.`,
@@ -628,11 +628,26 @@ Returns: The updated event details.`,
             throw new Error(`"${eventId}" is an occurrence of a repeating event, so say how much to change: scope "one" (only that occurrence) or scope "all" (the whole series, overwriting earlier single-occurrence edits). "future" is not available: Skylight refuses it. Nothing was changed.`);
           }
           if (!date) throw new Error(`A repeating event needs the occurrence's date (YYYY-MM-DD, from get_calendar_events). Nothing was changed.`);
-          if (startsAt !== undefined || endsAt !== undefined || allDay !== undefined || description !== undefined || location !== undefined) {
-            throw new Error("For a repeating event only the title and the family member assignment can be changed here; time, all-day, notes and location edits on a series are not verified. Make those in the Skylight app. Nothing was changed.");
+          if (allDay !== undefined || description !== undefined || location !== undefined) {
+            throw new Error("For a repeating event only the title, the family member assignment and the start and end time can be changed here; all-day, notes and location edits on a series are not verified. Make those in the Skylight app. Nothing was changed.");
           }
-          if (summary === undefined && !profiles?.length && categoryIds === undefined) {
-            throw new Error("Nothing to change: give a new summary or profiles. Nothing was changed.");
+          if ((startsAt === undefined) !== (endsAt === undefined)) {
+            throw new Error("To change a repeating event's time give both startsAt and endsAt. Nothing was changed.");
+          }
+          if (startsAt !== undefined && endsAt !== undefined) {
+            const timeRe = /^(\d{4}-\d{2}-\d{2})[T ]\d{2}:\d{2}(?::\d{2})?$/;
+            const sm = timeRe.exec(startsAt.trim());
+            const em = timeRe.exec(endsAt.trim());
+            if (!sm || !em) throw new Error("For a repeating event give startsAt and endsAt as local times YYYY-MM-DDTHH:MM with no offset or Z. Nothing was changed.");
+            if (sm[1] !== date || em[1] !== date) {
+              throw new Error(`A time change on a repeating event keeps its date: startsAt and endsAt must be on the occurrence's date (${date}); only the time of day changes. Nothing was changed.`);
+            }
+            if (Date.parse(withFrameOffset(endsAt, tz)) <= Date.parse(withFrameOffset(startsAt, tz))) {
+              throw new Error("endsAt must be after startsAt. Nothing was changed.");
+            }
+          }
+          if (summary === undefined && !profiles?.length && categoryIds === undefined && startsAt === undefined) {
+            throw new Error("Nothing to change: give a new summary, profiles or a new start and end time. Nothing was changed.");
           }
           const dayEvents = await getCalendarEvents({ dateMin: date, dateMax: date, timezone: tz });
           const event = dayEvents.find((e) => String(e.id) === eventId);
@@ -649,6 +664,11 @@ Returns: The updated event details.`,
           const categoryIdsToSend = profiles?.length ? (await resolveProfileIds(profiles)).ids : categoryIds !== undefined ? categoryIds : current;
           const updates: Record<string, unknown> = { category_ids: categoryIdsToSend };
           if (summary !== undefined) updates.summary = summary;
+          if (startsAt !== undefined && endsAt !== undefined) {
+            updates.starts_at = withFrameOffset(startsAt, tz);
+            updates.ends_at = withFrameOffset(endsAt, tz);
+            updates.timezone = tz;
+          }
           const updated = await updateCalendarEvent(eventId, updates, scope);
           const newTitle = String((updated.attributes as Record<string, unknown>).summary ?? title);
           const what = scope === "one"
