@@ -324,9 +324,15 @@ registers everything. This is a deliberate choice, not a limitation of the Worke
 
 - The hosted server is what Claude Duet drives proactively, sometimes
   unattended. Every allowlisted delete previews and deletes nothing unless
-  `confirm: true`, so the model has to show the exact target and get a yes
-  first. Calendar events stay local-only because a wrong delete there is the
-  costliest to miss.
+  `confirm: true`. That flag is set by the model, not by a person: the server
+  cannot tell whether anyone said yes, and some clients do not prompt before a
+  tool runs. The model is meant to show the exact target and wait for a yes, and
+  it can be told to in its instructions, but nothing here enforces it. The
+  server's hard limits are the write limiter (60 changes an hour, at most 10
+  deletes) and the fixed allowlist.
+- `delete_source_calendar` (removing a synced calendar) and adding a feed stay
+  local-only: a feed address is a secret and a wider, rarer change than deleting
+  one event.
 - Photo tools are uploads the Worker has no reason to carry.
 
 The allowlist is one list, `HOSTED_DESTRUCTIVE_ALLOWLIST` in

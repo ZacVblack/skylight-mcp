@@ -10,6 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - The live API-version test now counts an endpoint that answers with a bare empty array as empty (it only looked at a `data` array), so an empty endpoint is no longer reported as compared. The counting moved to a small tested helper (`itemCount`), mutation-checked. Test code only; no change to the shipped server.
 
+### Documentation
+- README, hosted-server section: removed the sentence saying calendar events stay local-only (since 1.14.0 `delete_calendar_event` is on the hosted allowlist, as the paragraph above it says), and stopped implying that `confirm: true` guarantees a person approved a delete. It is a flag the model sets; the limiter and the allowlist are the enforced limits.
+
 ## [1.15.0] - 2026-11-08
 
 ### Added
