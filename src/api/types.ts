@@ -296,6 +296,8 @@ export interface UpdateCalendarEventRequest {
   rrule?: string[] | null;
   timezone?: string;
   countdown_enabled?: boolean;
+  /** Scope for an occurrence of a repeating event: "one" or "all" ("future" is refused by Skylight). */
+  apply_to?: "one" | "all";
 }
 
 export type CalendarEventResponse = JsonApiResponse<CalendarEventResource>;

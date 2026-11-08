@@ -304,7 +304,7 @@ encrypted in the OAuth grant, not in a database you manage.
 The hosted server registers all **read and create/update tools**, plus these
 deletes: `delete_chore`, `delete_list`, `delete_list_item`, `delete_reward`,
 `delete_recipe`, `delete_meal_sitting`, `delete_message` and
-`delete_calendar_event` (Skylight-created, non-repeating events only). It does **not**
+`delete_calendar_event` (events created in Skylight or on a Google calendar, and repeating ones with an explicit scope; never subscribed feeds). It does **not**
 register `delete_source_calendar`, `delete_label` or photo uploads. The local (stdio) server
 registers everything. This is a deliberate choice, not a limitation of the Worker:
 
@@ -485,8 +485,8 @@ Messages are the notes shown on the frame (Skylight's web app calls them "nudges
 | `update_source_calendar_profiles` | write | Link a subscribed calendar feed to family profiles, or unlink it (the "Link profiles" checkboxes). Preview first, then `confirm: true`; it sends the complete set so the calendar's label is kept, then reads it back. Feeds only (`kind: webcal`); a calendar can never be left with no profile or label. |
 | `rename_source_calendar` | write | Rename a subscribed calendar feed as it appears in Skylight (feeds are named from the feed itself, often at length). Preview first, then `confirm: true`; reads it back and checks the linked profiles did not change. Feeds only (`kind: webcal`). |
 | `create_calendar_event` | write | Add an event. `profiles` assigns it to named family members. Local times are sent with the frame's UTC offset. |
-| `update_calendar_event` | write | Change an event, including who it is assigned to (`profiles`) |
-| `delete_calendar_event` | destructive | Delete one event created in Skylight. Needs the event's `date`; preview first, then `confirm: true`. Refuses events synced from Google or a feed, repeating events and non-editable events. Reads the day back to confirm it is gone. Also on the hosted server. |
+| `update_calendar_event` | write | Change an event, including who it is assigned to (`profiles`). For a repeating event give the occurrence's `date` and a `scope`: `one` (that occurrence only, which becomes its own event) or `all` (the whole series; overwrites earlier single-occurrence edits). Only the title and assignment can be changed on a series. There is no `future` scope: Skylight's API refuses it. Events on a Google calendar change at Google too. |
+| `delete_calendar_event` | destructive | Delete one event, or part of a repeating one. Needs the event's `date`; preview first, then `confirm: true`. A repeating event needs a `scope`: `one`, `future` (this and later occurrences) or `all` (the whole series); the preview says which. Events on a Google calendar are deleted at Google too, for everyone who shares it. Refuses subscribed-feed events, non-editable events, an occurrence that was edited on its own, and a repeating event with no scope. Reads the day back to confirm it is gone. Also on the hosted server. |
 
 ### Chore Tools
 

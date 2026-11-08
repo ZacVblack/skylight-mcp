@@ -59,6 +59,14 @@ secrets and never commit them:
 - The hosted tool set excludes photo uploads and every `delete_*` tool except an explicit
   allowlist (`HOSTED_DESTRUCTIVE_ALLOWLIST` in `src/worker/mcp.ts`). Each allowlisted delete is
   preview-first and needs `confirm: true`. `delete_source_calendar` and `delete_label` are local-only.
+- **Calendar deletes reach other people.** `delete_calendar_event` can delete events synced from a
+  Google calendar, and any scope of a repeating event (`one`, `future` or `all`, which removes the
+  whole series). A delete there is also made at Google, for everyone who shares that calendar, and
+  cannot be undone from this server. The only gates are the preview, `confirm: true` (a parameter
+  the calling model sets; the server does not require a separate preview call first, and some
+  clients, Claude Duet included, do not ask a person before a destructive tool call) and the
+  10-deletes-an-hour limit. Subscribed-feed events are read-only and always refused. If that
+  trade-off is wrong for you, remove `delete_calendar_event` from `HOSTED_DESTRUCTIVE_ALLOWLIST`.
 - **Change limit and log.** Every non-read tool call counts against a limit of 60 changes and 10
   deletes per hour (previews and failures included). Over the limit the call is refused and nothing
   is changed. Each attempt logs one line to stderr: tool name, effect, outcome, the running count

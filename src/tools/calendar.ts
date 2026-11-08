@@ -54,6 +54,33 @@ export function formatEventForTool(event: CalendarEventResource, labelById: Map<
   return `- Event (ID: ${event.id})\n${parts.join("\n")}`;
 }
 
+// A repeating event's occurrences have ids like 12345-1804032000: the series number, then the
+// occurrence's start in UTC epoch seconds (captured 2026-11-07). A one-off event has a plain number.
+const OCCURRENCE_ID = /^\d+-\d+$/;
+
+const SCOPE_EFFECT: Record<"one" | "future" | "all", (date: string) => string> = {
+  one: (date) => `ONLY the occurrence on ${date}`,
+  future: (date) => `the occurrence on ${date} AND every later occurrence (the series would end before ${date})`,
+  all: () => "the WHOLE series: every occurrence, past and future, including ones edited on their own",
+};
+
+/** Events from Skylight itself or a Google calendar are editable through Skylight's API (checked 2026-11-07); feeds are read-only. */
+function assertWritableSource(a: Record<string, unknown>, title: string, verb: string): void {
+  if (a.source !== "skylight" && a.source !== "google") {
+    throw new Error(`"${title}" comes from ${String(a.source ?? "another calendar")}, a read-only subscription. Skylight cannot change it; change it at its source. Nothing was ${verb}.`);
+  }
+  if (a.editable === false) throw new Error(`"${title}" is not editable. Nothing was ${verb}.`);
+}
+
+/** The profile ids an event is currently assigned to (what the app re-sends with an edit). */
+function eventCategoryIds(event: CalendarEventResource): string[] {
+  const ids = new Set<string>();
+  for (const ref of event.relationships?.categories?.data ?? []) if (ref?.id) ids.add(String(ref.id));
+  const single = event.relationships?.category?.data?.id;
+  if (single) ids.add(String(single));
+  return [...ids];
+}
+
 function joinNames(names: string[]): string {
   if (names.length <= 1) return names.join("");
   return `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
@@ -510,7 +537,13 @@ Parameters:
 - endsAt: New end time (ISO format)
 - description: Updated notes
 - location: Updated location
-- categoryIds: Updated family member assignments
+- profiles / categoryIds: Updated family member assignments
+
+REPEATING EVENTS (the id looks like 12345-1804032000): also give
+- date (required): the occurrence's date, YYYY-MM-DD, from get_calendar_events
+- scope (required): "one" changes only that occurrence (it becomes its own event, detached from the series); "all" changes the whole series AND overwrites any earlier edit made to a single occurrence. There is no "future" scope: Skylight's API refuses it, so do not offer it.
+For a repeating event only the title (summary) and the family member assignment can be changed here; time, notes and location edits on a series have not been verified, so make those in the Skylight app.
+Events on a Google calendar are updated at Google too, for everyone who shares that calendar.
 
 Returns: The updated event details.`,
     {
@@ -523,13 +556,57 @@ Returns: The updated event details.`,
       location: z.string().optional().describe("Updated location"),
       profiles: z.array(z.string()).optional().describe("Profile names to assign instead of the current ones, e.g. [\"Alex\"]."),
       categoryIds: z.array(z.string()).optional().describe("Profile IDs to assign. Prefer profiles."),
+      date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().describe("Repeating events only: the occurrence's date, YYYY-MM-DD"),
+      scope: z.enum(["one", "all"]).optional().describe("Repeating events only: \"one\" = this occurrence only; \"all\" = the whole series (overwrites earlier single-occurrence edits). No \"future\": Skylight refuses it."),
     },
-    async ({ eventId, summary, startsAt, endsAt, allDay, description, location, profiles, categoryIds }) => {
+    async ({ eventId, summary, startsAt, endsAt, allDay, description, location, profiles, categoryIds, date, scope }) => {
       try {
         if (profiles?.length && categoryIds?.length) throw new Error("Give profiles or categoryIds, not both.");
+        const tz = getConfig().timezone;
+        const repeating = OCCURRENCE_ID.test(eventId);
+
+        if (!repeating && scope) {
+          throw new Error(`scope only applies to repeating events (ids like 12345-1804032000); "${eventId}" is not one. Nothing was changed. Call again without scope.`);
+        }
+
+        if (repeating) {
+          if (!scope) {
+            throw new Error(`"${eventId}" is an occurrence of a repeating event, so say how much to change: scope "one" (only that occurrence) or scope "all" (the whole series, overwriting earlier single-occurrence edits). "future" is not available: Skylight refuses it. Nothing was changed.`);
+          }
+          if (!date) throw new Error(`A repeating event needs the occurrence's date (YYYY-MM-DD, from get_calendar_events). Nothing was changed.`);
+          if (startsAt !== undefined || endsAt !== undefined || allDay !== undefined || description !== undefined || location !== undefined) {
+            throw new Error("For a repeating event only the title and the family member assignment can be changed here; time, all-day, notes and location edits on a series are not verified. Make those in the Skylight app. Nothing was changed.");
+          }
+          if (summary === undefined && !profiles?.length && categoryIds === undefined) {
+            throw new Error("Nothing to change: give a new summary or profiles. Nothing was changed.");
+          }
+          const dayEvents = await getCalendarEvents({ dateMin: date, dateMax: date, timezone: tz });
+          const event = dayEvents.find((e) => String(e.id) === eventId);
+          if (!event) throw new Error(`No event with ID ${eventId} on ${date}. Nothing was changed. Check the ID and date with get_calendar_events.`);
+          const a = event.attributes as Record<string, unknown>;
+          const title = String(a.summary ?? "(untitled)");
+          assertWritableSource(a, title, "changed");
+          if (a.master_event_id || !(a.recurring === true || a.recurring_config === true)) {
+            throw new Error(`"${title}" is not an occurrence of a repeating series. Nothing was changed.`);
+          }
+          // The Skylight app always sends the profile assignment with an edit; send the current
+          // one unless a new one was asked for, so a title change cannot clear it.
+          const current = eventCategoryIds(event);
+          const categoryIdsToSend = profiles?.length ? (await resolveProfileIds(profiles)).ids : categoryIds !== undefined ? categoryIds : current;
+          const updates: Record<string, unknown> = { category_ids: categoryIdsToSend };
+          if (summary !== undefined) updates.summary = summary;
+          const updated = await updateCalendarEvent(eventId, updates, scope);
+          const newTitle = String((updated.attributes as Record<string, unknown>).summary ?? title);
+          const what = scope === "one"
+            ? `only the occurrence on ${date}; it is now its own event (ID: ${updated.id}), detached from the series`
+            : `the whole series (every occurrence, including any that had been edited on their own)`;
+          return {
+            content: [{ type: "text" as const, text: `Updated "${title}" to "${newTitle}": ${what}.` }],
+          };
+        }
+
         const updates: Record<string, unknown> = {};
         if (summary !== undefined) updates.summary = summary;
-        const tz = getConfig().timezone;
         if (startsAt !== undefined) updates.starts_at = withFrameOffset(startsAt, tz);
         if (endsAt !== undefined) updates.ends_at = withFrameOffset(endsAt, tz);
         if (allDay !== undefined) updates.all_day = allDay;
@@ -560,26 +637,30 @@ Returns: The updated event details.`,
   // delete_calendar_event tool
   server.tool(
     "delete_calendar_event",
-    `Delete one calendar event that was created in Skylight. Preview first, then confirm.
+    `Delete one calendar event, or part of a repeating one. Preview first, then confirm.
 
 Use this when:
 - Canceling an event: "Remove the dentist appointment"
+- Ending a repeating event: "Cancel soccer from March 30 on"
 - Undoing an event this server created by mistake
 
 Parameters:
-- eventId (required): ID of the event (from get_calendar_events)
+- eventId (required): ID of the event (from get_calendar_events). For a repeating event this is the occurrence's id, like 12345-1804032000.
 - date (required): the event's date, YYYY-MM-DD (used to find and show the event)
+- scope: REQUIRED for a repeating event, not allowed for a one-off one. "one" deletes only that occurrence; "future" deletes it and every later one (the series ends before it); "all" deletes the whole series, past and future, including occurrences edited on their own.
 - confirm: must be true to delete. Without it nothing is deleted and the event is shown.
 
-Always show the user the preview and wait for a yes to that exact event before calling again with confirm: true.
+Always show the user the preview and wait for a yes to that exact event and scope before calling again with confirm: true. It cannot be undone.
+Events on a Google calendar are deleted at Google too, for everyone who shares that calendar.
 
-Refused, with the reason: events synced from Google or a subscribed feed (delete those at their source, or they come back), repeating events, and events that are not editable.`,
+Refused, with the reason: events from a subscribed feed (read-only), events that are not editable, an occurrence that was edited on its own (delete it in the Skylight app; not verified), and a repeating event with no scope.`,
     {
       eventId: z.string().describe("ID of the event to delete"),
       date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).describe("The event's date, YYYY-MM-DD"),
+      scope: z.enum(["one", "future", "all"]).optional().describe("Repeating events only: \"one\" = this occurrence; \"future\" = this and every later one; \"all\" = the whole series"),
       confirm: z.boolean().optional().default(false).describe("Must be true to delete; otherwise only a preview is returned"),
     },
-    async ({ eventId, date, confirm }) => {
+    async ({ eventId, date, scope, confirm }) => {
       try {
         const tz = getConfig().timezone;
         const dayEvents = await getCalendarEvents({ dateMin: date, dateMax: date, timezone: tz });
@@ -588,13 +669,17 @@ Refused, with the reason: events synced from Google or a subscribed feed (delete
 
         const a = event.attributes as Record<string, unknown>;
         const title = String(a.summary ?? "(untitled)");
-        if (a.source !== "skylight") {
-          throw new Error(`"${title}" is synced from ${String(a.source ?? "another calendar")}, not created in Skylight. Deleting it here could fail or come back on the next sync. Delete it in its own calendar. Nothing was deleted.`);
+        assertWritableSource(a, title, "deleted");
+        if (a.master_event_id) {
+          throw new Error(`"${title}" is an occurrence that was edited on its own, and what a delete does to it is not verified. Nothing was deleted. Delete it in the Skylight app.`);
         }
-        if (a.recurring === true || a.recurring_config === true || a.master_event_id) {
-          throw new Error(`"${title}" is a repeating event, and what a delete does to the series is not verified. Nothing was deleted. Delete it in the Skylight app.`);
+        const series = a.recurring === true || a.recurring_config === true;
+        if (series && !scope) {
+          throw new Error(`"${title}" is a repeating event, so say how much to delete: scope "one" (only ${date}), "future" (${date} and every later one) or "all" (the whole series). Nothing was deleted.`);
         }
-        if (a.editable === false) throw new Error(`"${title}" is not editable. Nothing was deleted.`);
+        if (!series && scope) {
+          throw new Error(`scope only applies to repeating events; "${title}" is a one-off event. Nothing was deleted. Call again without scope.`);
+        }
 
         const labelById = new Map<string, string>();
         try {
@@ -603,19 +688,21 @@ Refused, with the reason: events synced from Google or a subscribed feed (delete
           /* names are a best-effort extra */
         }
         const shown = formatEventForTool(event, labelById);
+        const effect = scope ? SCOPE_EFFECT[scope](date) : "this one event";
+        const shared = a.source === "google" ? "\nIt is synced from a Google calendar, so this also removes it there, for everyone who shares that calendar." : "";
 
         if (!confirm) {
           return {
             content: [
               {
                 type: "text" as const,
-                text: `Preview only, nothing deleted. This would permanently delete:\n\n${shown}\n\nShow the user this event. If they say yes to exactly this one, call delete_calendar_event again with the same eventId and date and confirm: true.`,
+                text: `Preview only, nothing deleted. This would permanently delete ${effect}:\n\n${shown}${shared}\n\nShow the user this event and the scope. If they say yes to exactly this, call delete_calendar_event again with the same eventId, date${scope ? ", scope" : ""} and confirm: true.`,
               },
             ],
           };
         }
 
-        await deleteCalendarEvent(eventId);
+        await deleteCalendarEvent(eventId, scope);
         const check = await readBackUntil(
           () => getCalendarEvents({ dateMin: date, dateMax: date, timezone: tz }),
           (list) => !list.some((e) => String(e.id) === eventId)
@@ -624,7 +711,7 @@ Refused, with the reason: events synced from Google or a subscribed feed (delete
           throw new Error(`The delete was sent but "${title}" still shows on ${date}. Check the Skylight app before trying again.`);
         }
         return {
-          content: [{ type: "text" as const, text: `Deleted "${title}" (ID: ${eventId}). Confirmed gone by reading ${date} back.` }],
+          content: [{ type: "text" as const, text: `Deleted ${effect}: "${title}" (ID: ${eventId}). Confirmed gone by reading ${date} back.` }],
         };
       } catch (error) {
         return {

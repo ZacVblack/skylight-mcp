@@ -79,27 +79,38 @@ export async function createCalendarEvent(
 }
 
 /**
- * Update a calendar event
+ * How much of a repeating series a change reaches. Captured from the Skylight web app
+ * (2026-11-07): "one" is this occurrence, "future" is this and every later one, "all" is the
+ * whole series. An edit with "future" is refused by Skylight's API (400); a delete accepts all three.
+ */
+export type EventScope = "one" | "future" | "all";
+
+/**
+ * Update a calendar event. For an occurrence of a repeating event pass `applyTo`
+ * ("one" or "all"; the app sends it in the JSON body). Leave it out for a one-off event.
  */
 export async function updateCalendarEvent(
   eventId: string,
-  data: UpdateCalendarEventRequest
+  data: UpdateCalendarEventRequest,
+  applyTo?: Exclude<EventScope, "future">
 ): Promise<CalendarEventResource> {
   const client = getClient();
   const response = await client.request<CalendarEventResponse>(
     `/api/frames/{frameId}/calendar_events/${eventId}`,
-    { method: "PUT", body: data }
+    { method: "PUT", body: applyTo ? { ...data, apply_to: applyTo } : data }
   );
   return response.data;
 }
 
 /**
- * Delete a calendar event
+ * Delete a calendar event. For an occurrence of a repeating event pass `applyTo`
+ * (the app sends it as the `apply_to` query parameter on a DELETE with no body).
  */
-export async function deleteCalendarEvent(eventId: string): Promise<void> {
+export async function deleteCalendarEvent(eventId: string, applyTo?: EventScope): Promise<void> {
   const client = getClient();
   await client.request(`/api/frames/{frameId}/calendar_events/${eventId}`, {
     method: "DELETE",
+    params: applyTo ? { apply_to: applyTo } : undefined,
   });
 }
 

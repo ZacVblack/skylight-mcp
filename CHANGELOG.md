@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Repeating events: `delete_calendar_event` takes a `scope` (`one`, `future`, `all`) and `update_calendar_event` takes a `scope` (`one`, `all`) plus the occurrence's `date`. Captured from the Skylight web app and checked against a Google calendar on 2026-11-07. The scope is sent as `apply_to`: in the JSON body for an edit, as a query parameter for a delete. The delete preview names what the scope removes and shows the repeat rule.
+- `update_calendar_event` on a series only changes the title and the profile assignment (the only fields captured); it re-sends the current assignment the way the app does, so a title change cannot clear it. Time, notes and location edits on a series are refused as unverified.
+
+### Changed
+- `delete_calendar_event` now works on events synced from a Google calendar (it refused them before because write-through was unverified). The preview says the delete also removes the event at Google for everyone who shares that calendar. Subscribed-feed events, non-editable events and an occurrence that was edited on its own are still refused.
+- There is no `future` scope for edits: Skylight's own API answers 400 "All this and future updates are not currently supported", although its app offers the option.
+- Still unverified: feed-backed calendars, all-day repeating events, deleting a one-off Google event by this path (the plain DELETE is the same call as before), and whether a deleted Google event stays gone over days.
+
 ## [1.13.1] - 2026-11-06
 
 ### Fixed

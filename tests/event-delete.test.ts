@@ -59,7 +59,7 @@ function stub(events: unknown[], opts: { lagReads?: number; neverDeletes?: boole
       }
       if (method === "DELETE") {
         deletes.push(u);
-        pendingDelete = u.split("/").pop()!;
+        pendingDelete = u.split("?")[0]!.split("/").pop()!;
         lag = opts.lagReads ?? 0;
         if (!opts.neverDeletes && lag === 0) live = live.filter((e) => e.id !== pendingDelete);
         return new Response(null, { status: 204 });
@@ -118,17 +118,94 @@ describe("delete_calendar_event (hosted, preview-first)", () => {
   });
 
   it.each([
-    ["a Google-synced event", { source: "google" }],
     ["a feed event", { source: "ics_link", editable: false }],
-    ["a repeating event", { recurring: true, recurring_config: true }],
-    ["an instance with a master event", { master_event_id: "850" }],
+    ["a feed event reporting editable", { source: "ics_link" }],
     ["a non-editable event", { editable: false }],
+    ["an occurrence edited on its own", { master_event_id: "uof1jj830ii82vaakifhnassco" }],
+    ["a Google event that is not editable", { source: "google", editable: false }],
   ])("refuses %s even with confirm, and sends no DELETE", async (_label, over) => {
     const s = stub([ev("1", over)]);
     const out = await call("delete_calendar_event", { eventId: "1", date: "2026-11-12", confirm: true });
     expect(out.isError).toBe(true);
     expect(out.text).toContain("Nothing was deleted");
     expect(s.deletes).toEqual([]);
+  });
+
+  describe("Google-synced events", () => {
+    it("previews with a note that it also removes the event at Google, and sends a plain DELETE (no apply_to)", async () => {
+      const s = stub([ev("1", { source: "google" })]);
+      const preview = await call("delete_calendar_event", { eventId: "1", date: "2026-11-12" });
+      expect(preview.text).toContain("Google");
+      expect(preview.text).toContain("everyone who shares");
+      expect(s.deletes).toEqual([]);
+      const out = await call("delete_calendar_event", { eventId: "1", date: "2026-11-12", confirm: true });
+      expect(out.isError).toBe(false);
+      expect(s.deletes).toHaveLength(1);
+      expect(s.deletes[0]).toMatch(/calendar_events\/1$/);
+    });
+  });
+
+  describe("repeating events (scope)", () => {
+    const rep = (over: Record<string, unknown> = {}) =>
+      ev("14553251426-1804032000", {
+        source: "google",
+        recurring: true,
+        recurring_config: true,
+        rrule: ["RRULE:FREQ=WEEKLY;WKST=SU;UNTIL=20270407T235959Z;INTERVAL=1;BYDAY=TU"],
+        ...over,
+      });
+    const date = "2026-11-12";
+
+    it("refuses a repeating event with no scope, even with confirm, and sends no DELETE", async () => {
+      const s = stub([rep()]);
+      const out = await call("delete_calendar_event", { eventId: "14553251426-1804032000", date, confirm: true });
+      expect(out.isError).toBe(true);
+      expect(out.text).toContain("say how much to delete");
+      expect(out.text).toContain("Nothing was deleted");
+      expect(s.deletes).toEqual([]);
+    });
+
+    it("refuses a scope on a one-off event, and sends no DELETE", async () => {
+      const s = stub([ev("1")]);
+      const out = await call("delete_calendar_event", { eventId: "1", date, scope: "all", confirm: true });
+      expect(out.isError).toBe(true);
+      expect(out.text).toContain("only applies to repeating events");
+      expect(s.deletes).toEqual([]);
+    });
+
+    it("rejects a scope that is not one, future or all, and sends no DELETE", async () => {
+      const s = stub([rep()]);
+      const out = await call("delete_calendar_event", { eventId: "14553251426-1804032000", date, scope: "everything", confirm: true });
+      expect(out.isError).toBe(true);
+      expect(s.deletes).toEqual([]);
+    });
+
+    it.each([
+      ["one", "ONLY the occurrence"],
+      ["future", "AND every later occurrence"],
+      ["all", "WHOLE series"],
+    ])("scope %s: the preview says what it removes and sends nothing", async (scope, words) => {
+      const s = stub([rep()]);
+      const out = await call("delete_calendar_event", { eventId: "14553251426-1804032000", date, scope });
+      expect(out.isError).toBe(false);
+      expect(out.text).toContain("Preview only");
+      expect(out.text).toContain(words);
+      expect(out.text).toContain("RRULE:FREQ=WEEKLY");
+      expect(s.deletes).toEqual([]);
+    });
+
+    it.each(["one", "future", "all"])("scope %s: with confirm sends exactly one DELETE carrying that scope and no other", async (scope) => {
+      const s = stub([rep()]);
+      const out = await call("delete_calendar_event", { eventId: "14553251426-1804032000", date, scope, confirm: true });
+      expect(out.isError).toBe(false);
+      expect(s.deletes).toEqual([expect.stringMatching(new RegExp(`/calendar_events/14553251426-1804032000\\?apply_to=${scope}$`))]);
+    });
+
+    it("keeps the token on the pinned host for a scoped delete", async () => {
+      const s = stub([rep()]);
+      await call("delete_calendar_event", { eventId: "14553251426-1804032000", date, scope: "one", confirm: true });
+      expect(s.deletes[0]!.startsWith("https://app.ourskylight.com/")).toBe(true);
+    });
   });
 
   it("refuses an id that is not on that date, and sends no DELETE", async () => {
