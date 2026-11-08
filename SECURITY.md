@@ -54,7 +54,8 @@ secrets and never commit them:
 > **Access this server grants.** A connected hosted client can create, edit and delete anything in the
 > Skylight frame, including events on every Google calendar synced to it (the shared family calendar
 > and any family member's personal calendar alike). Those changes are made at Google, for the calendar's
-> owner and everyone who shares it, and cannot be undone from here. The server cannot tell a shared
+> owner and everyone who shares it, and cannot be undone from here. Google attributes them to the
+> account connected to Skylight, so they look like that person's own edits. The server cannot tell a shared
 > calendar from a personal one unless you configure it to. Treat the connection like write access to
 > all of those calendars.
 

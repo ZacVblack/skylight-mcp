@@ -304,7 +304,8 @@ encrypted in the OAuth grant, not in a database you manage.
 > connection can create, edit and delete anything in the connected Skylight frame, including events
 > on every Google calendar connected to it, not only the shared family one. That includes another
 > person's personal Google calendar if it is connected to Skylight: a delete or edit there is made at
-> Google, shows on their phone, and cannot be undone from this server. Deleting a repeating event
+> Google, shows on their phone, and cannot be undone from this server. Google records the change
+> as made by the account that is connected to Skylight, not by you or by the AI. Deleting a repeating event
 > with scope `all` removes the whole series, past and future. Claude Duet does not ask before a
 > destructive tool call, and the preview step is a parameter the model sets, not something the server
 > enforces. Limits that do hold: 60 changes an hour, at most 10 of them deletes, and events from
