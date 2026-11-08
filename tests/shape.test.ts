@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { diffShapes, isSameShape, shapeOf } from "./live/shape.js";
+import { diffShapes, isSameShape, itemCount, shapeOf } from "./live/shape.js";
 
 describe("shape fingerprint", () => {
   it("is the same for the same structure with different values", () => {
@@ -48,5 +48,21 @@ describe("shape fingerprint", () => {
     expect(joined).not.toContain("abcdefghijklmnop");
     expect(joined).toContain("<key>");
     expect(joined).toContain("plain:number");
+  });
+});
+
+describe("itemCount", () => {
+  it("counts a data array, empty or not", () => {
+    expect(itemCount({ data: [] })).toBe(0);
+    expect(itemCount({ data: [{ id: "1" }, { id: "2" }] })).toBe(2);
+  });
+  it("counts a bare top-level array, so an empty one is empty and not unknown", () => {
+    expect(itemCount([])).toBe(0);
+    expect(itemCount([{ id: "1" }])).toBe(1);
+  });
+  it("is null when the body is not a list", () => {
+    expect(itemCount({ data: { id: "1" } })).toBeNull();
+    expect(itemCount(null)).toBeNull();
+    expect(itemCount("x")).toBeNull();
   });
 });

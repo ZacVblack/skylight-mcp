@@ -3,7 +3,7 @@ import { SKYLIGHT_API_VERSION } from "../../src/api/constants.js";
 import { isoWithOffset } from "../../src/api/endpoints/messages.js";
 import { addDays, zonedToEpoch } from "../../src/utils/schedule.js";
 import { liveSuite } from "./harness.js";
-import { diffShapes, isSameShape } from "./shape.js";
+import { diffShapes, isSameShape, itemCount } from "./shape.js";
 
 // Does the response shape of each read endpoint change between our default
 // Skylight-Api-Version and the version the iOS app 2.31.0 sends? Skylight changes
@@ -80,12 +80,6 @@ function buildProbes(from: string, to: string, timezone: string): Probe[] {
     { name: "rewards", endpoint: "/api/frames/{frameId}/rewards", plusOnly: true },
     { name: "reward_points", endpoint: "/api/frames/{frameId}/reward_points", plusOnly: true },
   ];
-}
-
-/** Items in a JSON:API-style list, or null when the body has no `data` array. */
-function itemCount(body: unknown): number | null {
-  const data = (body as { data?: unknown } | null)?.data;
-  return Array.isArray(data) ? data.length : null;
 }
 
 function isAccepted(name: string, onlyOld: string[], onlyNew: string[]): boolean {

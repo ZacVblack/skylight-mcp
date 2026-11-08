@@ -56,3 +56,15 @@ export function diffShapes(oldValue: unknown, newValue: unknown): ShapeDiff {
 export function isSameShape(diff: ShapeDiff): boolean {
   return diff.onlyOld.length === 0 && diff.onlyNew.length === 0;
 }
+
+/**
+ * Items in a list body: the `data` array of a JSON:API-style response, or the body itself
+ * when the endpoint answers with a bare array. Null when neither (a single resource or an
+ * object with no list). A bare empty array must count as 0, not null, or an empty endpoint
+ * would be reported as compared and the "same" result would be vacuous.
+ */
+export function itemCount(body: unknown): number | null {
+  if (Array.isArray(body)) return body.length;
+  const data = (body as { data?: unknown } | null)?.data;
+  return Array.isArray(data) ? data.length : null;
+}

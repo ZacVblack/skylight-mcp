@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- The live API-version test now counts an endpoint that answers with a bare empty array as empty (it only looked at a `data` array), so an empty endpoint is no longer reported as compared. The counting moved to a small tested helper (`itemCount`), mutation-checked. Test code only; no change to the shipped server.
+
 ## [1.15.0] - 2026-11-08
 
 ### Added
