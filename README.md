@@ -299,6 +299,19 @@ resource server. Signing in is the same browser-paste flow as the CLI; your
 Skylight password never reaches the Worker, and the Skylight tokens are kept
 encrypted in the OAuth grant, not in a database you manage.
 
+> [!CAUTION]
+> **The hosted server can change and delete things other people own.** Whoever (or whatever) holds the
+> connection can create, edit and delete anything in the connected Skylight frame, including events
+> on every Google calendar connected to it, not only the shared family one. That includes another
+> person's personal Google calendar if it is connected to Skylight: a delete or edit there is made at
+> Google, shows on their phone, and cannot be undone from this server. Deleting a repeating event
+> with scope `all` removes the whole series, past and future. Claude Duet does not ask before a
+> destructive tool call, and the preview step is a parameter the model sets, not something the server
+> enforces. Limits that do hold: 60 changes an hour, at most 10 of them deletes, and events from
+> subscribed feeds are read-only. Check which calendars your frame syncs (`get_source_calendars`)
+> before you connect a client you do not supervise, and remove `delete_calendar_event` from
+> `HOSTED_DESTRUCTIVE_ALLOWLIST` if that is more access than you want to give.
+
 ### Which tools the hosted server exposes, and why
 
 The hosted server registers all **read and create/update tools**, plus these
