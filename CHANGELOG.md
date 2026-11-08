@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.15.0] - 2026-11-08
+
 ### Added
 - `create_calendar_event` takes `repeat` to create a repeating series: `frequency` daily or weekly, `interval`, `byDay` (weekly, must be the weekday of `startsAt`), and exactly one of `until` or `count`; at most 104 occurrences over two years, no open-ended series. A series is only previewed (every date listed, nothing written) until the call repeats with `confirm: true`. It is created on Skylight's own calendar (the caller cannot choose a calendar; checked live on 2026-11-08: no calendar fields are sent, the series reads back as `source: skylight`, and nothing is written to Google), and is refused for all-day events, more than one profile, past starts and unknown fields. `count` is sent as the `UNTIL` of the last occurrence, never as `COUNT`. Checked live: a weekly series of 3 read back with the right dates and times, the generated `UNTIL` was accepted, and `delete_calendar_event` scope `all` removed it. Not yet verified live: daily rules.
 
