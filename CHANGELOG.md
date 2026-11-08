@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.16.0] - 2026-11-08
+
 ### Added
 - `update_calendar_event` on a repeating series can change the time of day: give `startsAt` and `endsAt` together, both on the occurrence's `date`, local times with no offset. Sent as `starts_at`, `ends_at` and `timezone` with `apply_to`, plus the current profile assignment. Checked live on 2026-11-08 with scope `all` on a throwaway weekly series of 3: every occurrence moved, it stayed one series with the same rule, and the occurrence ids changed (they embed the start time). Scope `one` is accepted but has not been tried live. Notes, location and all-day edits on a series are still refused.
 
