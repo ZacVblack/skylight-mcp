@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+- The CI workflow now declares `permissions: contents: read` explicitly (a CodeQL finding, "Workflow does not contain permissions"). The repository default was already read-only, so behaviour is unchanged; the declaration makes it independent of that setting.
+
 ## [1.14.0] - 2026-11-07
 
 ### Added
