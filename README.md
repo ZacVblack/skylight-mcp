@@ -512,7 +512,7 @@ Messages are the notes shown on the frame (Skylight's web app calls them "nudges
 
 | Tool | Effect | Description |
 |------|--------|-------------|
-| `get_chores` | read | Chores with optional filters (date, assignee, status) |
+| `get_chores` | read | Chores with their ids, with optional filters (date, assignee, status) |
 | `create_chore` | write | Create a one-off chore for one family member (assignee required; Skylight rejects a chore with no profile). Repeating tasks: `create_routine` |
 | `update_chore` | write | Rename, reschedule, reassign a one-off chore. For recurring chores and routines only a rename and a weekly schedule (`days` + `timeOfDay`) are supported; a schedule change needs `acknowledgeReset: true` because it can reset streak history, and Skylight re-keys the chore (the reply gives the new id). Completion goes through `complete_chore`. |
 | `create_routine` | write | Create a weekly routine (morning, afternoon or evening) for one or more profiles, via `create_multiple`. Optional habit tracking and stars. Weekly schedules only. |
