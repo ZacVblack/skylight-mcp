@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- The live API-version test now accepts `unfiltered_linked_category_ids`, a chore attribute that appears only under API version 2026-10-15 (named by the fixed probe on 2026-11-08, the first time chores existed during a run; null on the sample). It is additive and no tool reads it. Test code only.
+
 ## [1.17.0] - 2026-11-08
 
 ### Added

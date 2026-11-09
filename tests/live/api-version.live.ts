@@ -30,6 +30,9 @@ const APP_VERSION = "2026-10-15";
  */
 const ACCEPTED_ADDITIONS: Record<string, string[]> = {
   avatars: ["data[].attributes.display_position", "data[].attributes.reward_animations"],
+  // Seen live 2026-11-08 once chores existed: one extra chore attribute under the newer version, null on the sample
+  // (a list of profile ids by its name). Additive; no tool reads it. Reviewed and accepted.
+  chores: ["data[].attributes.unfiltered_linked_category_ids"],
 };
 
 interface Probe {
