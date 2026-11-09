@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- `get_chores` now prints each chore's id, `(ID: n)` after the name. `delete_chore`, `update_chore` and `complete_chore` take an id "from get_chores", but it was never printed, so a chore made in the app (or in an earlier session) could not be deleted or edited through the tools. Found 2026-11-08 while cleaning up a test chore. Recurring occurrences show their composite id.
 - The live API-version test now accepts `unfiltered_linked_category_ids`, a chore attribute that appears only under API version 2026-10-15 (named by the fixed probe on 2026-11-08, the first time chores existed during a run; null on the sample). It is additive and no tool reads it. Test code only.
 
 ## [1.17.0] - 2026-11-08
