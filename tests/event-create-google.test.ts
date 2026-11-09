@@ -116,6 +116,22 @@ describe("create_calendar_event with calendar (Google target)", () => {
     expect(s.posts[0]!.body.calendar_id).toBe(GCAL);
   });
 
+  it("an all-day series with calendar posts date-only start and end plus the Google calendar fields", async () => {
+    const s = stub();
+    const body = { summary: "No school", startsAt: "2037-03-03", endsAt: "2037-03-04", allDay: true, repeat: { frequency: "weekly", count: 3 }, calendar: "Family" };
+    const pre = await call(body);
+    expect(pre.text).toContain("all day");
+    expect(pre.text).toContain('Google calendar "Family"');
+    expect(s.posts).toEqual([]);
+    await call({ ...body, confirm: true });
+    expect(s.posts).toHaveLength(1);
+    expect(s.posts[0]!.body.all_day).toBe(true);
+    expect(s.posts[0]!.body.starts_at).toBe("2037-03-03");
+    expect(s.posts[0]!.body.ends_at).toBe("2037-03-04");
+    expect(s.posts[0]!.body.calendar_id).toBe(GCAL);
+    expect(s.posts[0]!.body.calendar_account_id).toBe(ACCT);
+  });
+
   it("without calendar nothing changes: Skylight's own calendar, no calendar fields", async () => {
     const s = stub();
     await call({ summary: "Dentist", startsAt: one.startsAt, endsAt: one.endsAt });

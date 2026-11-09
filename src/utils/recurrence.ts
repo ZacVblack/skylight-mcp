@@ -57,7 +57,8 @@ export function planRepeat(
   startTime: string,
   endsBeforeStart: boolean,
   timeZone: string,
-  nowMs: number
+  nowMs: number,
+  allDay = false
 ): RepeatPlan {
   const known = new Set(["frequency", "interval", "byDay", "until", "count"]);
   for (const k of Object.keys(input)) if (!known.has(k)) throw new RepeatError(`Unknown repeat field "${k}".`);
@@ -90,7 +91,11 @@ export function planRepeat(
   }
 
   const first = zonedToEpoch(startDate, startTime, timeZone);
-  if (first <= nowMs) throw new RepeatError("startsAt is in the past.");
+  if (allDay) {
+    // An all-day series may start today: compare dates, not the instant of local midnight.
+    const today = new Date(nowMs).toLocaleDateString("en-CA", { timeZone });
+    if (startDate < today) throw new RepeatError("startsAt is in the past.");
+  } else if (first <= nowMs) throw new RepeatError("startsAt is in the past.");
 
   const step = input.frequency === "weekly" ? 7 * interval : interval;
   const lastAllowed = hasUntil ? input.until! : addDays(startDate, MAX_SPAN_DAYS);

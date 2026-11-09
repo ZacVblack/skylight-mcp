@@ -15,6 +15,7 @@ import { formatAttribute, redactFeedUrl } from "../utils/redact.js";
 import { checkCalendarName, readBackUntil, removeSourceCalendar, renameSourceCalendar, setSourceCalendarCategories } from "../api/endpoints/source-calendars.js";
 import { getConfig } from "../config.js";
 import { RepeatError, planRepeat } from "../utils/recurrence.js";
+import { addDays } from "../utils/schedule.js";
 import { getCategories, resolveProfileIds } from "../api/endpoints/categories.js";
 import type { CalendarEventResource } from "../api/types.js";
 
@@ -518,7 +519,7 @@ Parameters:
 - calendar: name of a linked Google calendar (see get_source_calendars, kind gmail). Only when the person asks for it. Omit it and the event goes to Skylight's own calendar, which does NOT appear in Google. With it the event (or series) is written to that Google calendar and shows for everyone who shares it, so it needs confirm: true like a series.
 - confirm: required for a series or when calendar is given. Without confirm: true nothing is created; you get a preview (a series lists every date; a calendar names it). Show it to the person, get their yes, then call again with confirm: true.
 
-REPEATING SERIES: give startsAt/endsAt as local times with no offset; all-day and more than one profile are refused. Without calendar the series is created on Skylight's own calendar (verified live 2026-11-08): it shows on the Skylight displays and app, and is NOT written to Google, so people who only use Google Calendar will not see it. With calendar it is written to that Google calendar (not yet verified live). This tool does not check conflicts: call find_conflicts over the series dates first. To undo a series, delete_calendar_event with scope "all".
+REPEATING SERIES: give startsAt/endsAt as local times with no offset; more than one profile is refused. ALL-DAY SERIES (allDay: true): give startsAt and endsAt as dates YYYY-MM-DD with endsAt the day AFTER startsAt (one day per occurrence; the end is exclusive); not yet verified live. Without calendar the series is created on Skylight's own calendar (verified live 2026-11-08): it shows on the Skylight displays and app, and is NOT written to Google, so people who only use Google Calendar will not see it. With calendar it is written to that Google calendar (not yet verified live). This tool does not check conflicts: call find_conflicts over the series dates first. To undo a series, delete_calendar_event with scope "all".
 
 Returns: The created event details.
 
@@ -557,16 +558,28 @@ Related: get_family_members lists the profile names and IDs.`,
           : "Goes to Skylight's own calendar: it shows on the Skylight displays and app and is not written to Google.";
         let rrule: string[] | undefined;
         if (repeat) {
-          if (allDay) throw new RepeatError("All-day repeating events are not supported yet; use the Skylight app.");
           if ((resolved?.length ?? 0) > 1) throw new RepeatError("A repeating series with more than one profile is not supported yet; give one profile or none.");
-          const m = /^(\d{4}-\d{2}-\d{2})[T ](\d{2}:\d{2})(?::\d{2})?$/.exec(startsAt.trim());
-          if (!m) throw new RepeatError("For a repeating event give startsAt as local time YYYY-MM-DDTHH:MM with no offset or Z.");
-          const startMs = Date.parse(withFrameOffset(startsAt, config.timezone));
-          const endMs = Date.parse(withFrameOffset(endsAt, config.timezone));
-          if (Number.isNaN(endMs) || !/^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(?::\d{2})?$/.test(endsAt.trim())) {
-            throw new RepeatError("For a repeating event give endsAt as local time YYYY-MM-DDTHH:MM with no offset or Z.");
+          let plan;
+          if (allDay) {
+            const sd = startsAt.trim();
+            const ed = endsAt.trim();
+            if (!/^\d{4}-\d{2}-\d{2}$/.test(sd) || !/^\d{4}-\d{2}-\d{2}$/.test(ed)) {
+              throw new RepeatError("For an all-day repeating event give startsAt and endsAt as dates YYYY-MM-DD, endsAt being the day AFTER startsAt (the end is exclusive, as in the Skylight app).");
+            }
+            if (ed !== addDays(sd, 1)) {
+              throw new RepeatError(`An all-day series is one day per occurrence: endsAt must be the day after startsAt (${addDays(sd, 1)}). Multi-day occurrences are not supported yet.`);
+            }
+            plan = planRepeat(repeat, sd, "00:00", false, config.timezone, Date.now(), true);
+          } else {
+            const m = /^(\d{4}-\d{2}-\d{2})[T ](\d{2}:\d{2})(?::\d{2})?$/.exec(startsAt.trim());
+            if (!m) throw new RepeatError("For a repeating event give startsAt as local time YYYY-MM-DDTHH:MM with no offset or Z.");
+            const startMs = Date.parse(withFrameOffset(startsAt, config.timezone));
+            const endMs = Date.parse(withFrameOffset(endsAt, config.timezone));
+            if (Number.isNaN(endMs) || !/^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(?::\d{2})?$/.test(endsAt.trim())) {
+              throw new RepeatError("For a repeating event give endsAt as local time YYYY-MM-DDTHH:MM with no offset or Z.");
+            }
+            plan = planRepeat(repeat, m[1]!, m[2]!, endMs <= startMs, config.timezone, Date.now());
           }
-          const plan = planRepeat(repeat, m[1]!, m[2]!, endMs <= startMs, config.timezone, Date.now());
           rrule = [plan.rrule];
           if (confirm !== true) {
             const dates = plan.occurrences.map((o) => o.date);
@@ -575,7 +588,7 @@ Related: get_family_members lists the profile names and IDs.`,
                 {
                   type: "text" as const,
                   text: [
-                    `PREVIEW, nothing created. "${summary}" would repeat ${repeat.frequency} (every ${repeat.interval ?? 1}), ${dates.length} occurrence${dates.length === 1 ? "" : "s"}, ${startsAt.trim().slice(11, 16)} to ${endsAt.trim().slice(11, 16)} (${config.timezone}).`,
+                    `PREVIEW, nothing created. "${summary}" would repeat ${repeat.frequency} (every ${repeat.interval ?? 1}), ${dates.length} occurrence${dates.length === 1 ? "" : "s"}, ${allDay ? "all day" : `${startsAt.trim().slice(11, 16)} to ${endsAt.trim().slice(11, 16)}`} (${config.timezone}).`,
                     `Dates: ${dates.join(", ")}`,
                     profiles?.length ? `Profile: ${profiles.join(", ")}` : "Profile: none",
                     destination,
