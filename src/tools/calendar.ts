@@ -82,6 +82,47 @@ function eventCategoryIds(event: CalendarEventResource): string[] {
   return [...ids];
 }
 
+
+const GOOGLE_LOOKAROUND_DAYS = 90;
+
+/**
+ * Resolve a linked Google calendar by its name (label) for a write. Skylight's create call
+ * needs the Google calendar address (source_id) and a calendar account id; the account id is
+ * not on the source-calendar record, so it is read from an existing event on that calendar
+ * near the new event's date. Refuses rather than guesses. Ids stay inside the call: only the
+ * label is ever shown.
+ */
+async function resolveGoogleTarget(name: string, startsAt: string, tz: string): Promise<{ label: string; calendarId: string; accountId: string }> {
+  const want = name.trim().toLowerCase();
+  const gmail = (await getSourceCalendars()).filter((c) => c.attributes.kind === "gmail");
+  const labelOf = (c: (typeof gmail)[number]) => String(c.attributes.label ?? "").trim();
+  const known = gmail.map(labelOf).join(", ") || "none";
+  const matches = gmail.filter((c) => labelOf(c).toLowerCase() === want);
+  if (matches.length === 0) throw new Error(`No linked Google calendar named "${name}". Linked Google calendars: ${known}. Nothing was created.`);
+  if (matches.length > 1) throw new Error(`More than one linked Google calendar is named "${name}". Nothing was created.`);
+  const cal = matches[0]!;
+  if (cal.attributes.editable === false || cal.attributes.role === "reader") {
+    throw new Error(`"${labelOf(cal)}" is read-only for this account, so events cannot be written to it. Nothing was created.`);
+  }
+  const calendarId = String(cal.attributes.source_id ?? "");
+  if (!calendarId) throw new Error(`"${labelOf(cal)}" has no calendar address in Skylight. Nothing was created.`);
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(startsAt.trim());
+  const centre = m ? Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : Date.now();
+  const iso = (ms: number) => new Date(ms).toISOString().slice(0, 10);
+  const events = await getCalendarEvents({
+    dateMin: iso(centre - GOOGLE_LOOKAROUND_DAYS * 86_400_000),
+    dateMax: iso(centre + GOOGLE_LOOKAROUND_DAYS * 86_400_000),
+    timezone: tz,
+  });
+  for (const e of events) {
+    const a = e.attributes as Record<string, unknown>;
+    if (a.calendar_id === calendarId && typeof a.calendar_account_id === "string" && a.calendar_account_id) {
+      return { label: labelOf(cal), calendarId, accountId: a.calendar_account_id };
+    }
+  }
+  throw new Error(`Cannot write to "${labelOf(cal)}": no existing event on it within ${GOOGLE_LOOKAROUND_DAYS} days of the new event, so its account cannot be determined. Add one event to it in the Skylight app, or ask without a calendar to use Skylight's own calendar. Nothing was created.`);
+}
+
 function joinNames(names: string[]): string {
   if (names.length <= 1) return names.join("");
   return `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
@@ -474,9 +515,10 @@ Parameters:
 - location: Where the event takes place
 - profiles: Profile names to assign (e.g. ["Alex"]); categoryIds is the ID fallback
 - repeat: makes a repeating series. { frequency: "daily" | "weekly", interval (weekly 1-4, daily 1-7), byDay (weekly; must be the weekday of startsAt), and exactly one of until (YYYY-MM-DD, inclusive) or count }. Max 104 occurrences and 2 years; no open-ended series; no monthly or yearly yet.
-- confirm: required for a series. Without confirm: true a series is NOT created; you get a preview listing every date. Show it to the person, get their yes, then call again with confirm: true.
+- calendar: name of a linked Google calendar (see get_source_calendars, kind gmail). Only when the person asks for it. Omit it and the event goes to Skylight's own calendar, which does NOT appear in Google. With it the event (or series) is written to that Google calendar and shows for everyone who shares it, so it needs confirm: true like a series.
+- confirm: required for a series or when calendar is given. Without confirm: true nothing is created; you get a preview (a series lists every date; a calendar names it). Show it to the person, get their yes, then call again with confirm: true.
 
-REPEATING SERIES: give startsAt/endsAt as local times with no offset; all-day and more than one profile are refused. The series is created on Skylight's own calendar (verified live 2026-11-08): it shows on the Skylight displays and app, and is NOT written to Google, so people who only use Google Calendar will not see it. This tool does not check conflicts: call find_conflicts over the series dates first. To undo a series, delete_calendar_event with scope "all".
+REPEATING SERIES: give startsAt/endsAt as local times with no offset; all-day and more than one profile are refused. Without calendar the series is created on Skylight's own calendar (verified live 2026-11-08): it shows on the Skylight displays and app, and is NOT written to Google, so people who only use Google Calendar will not see it. With calendar it is written to that Google calendar (not yet verified live). This tool does not check conflicts: call find_conflicts over the series dates first. To undo a series, delete_calendar_event with scope "all".
 
 Returns: The created event details.
 
@@ -501,13 +543,18 @@ Related: get_family_members lists the profile names and IDs.`,
         .strict()
         .optional()
         .describe("Make this a repeating series (see the tool description)."),
-      confirm: z.boolean().optional().describe("Series only: must be true to create; otherwise a preview is returned."),
+      calendar: z.string().optional().describe("Name of a linked Google calendar to write to (see get_source_calendars). Only when the person asks; default is Skylight's own calendar."),
+      confirm: z.boolean().optional().describe("Series or calendar only: must be true to create; otherwise a preview is returned."),
     },
-    async ({ summary, startsAt, endsAt, allDay, description, location, profiles, categoryIds, repeat, confirm }) => {
+    async ({ summary, startsAt, endsAt, allDay, description, location, profiles, categoryIds, repeat, calendar, confirm }) => {
       try {
         const config = getConfig();
         if (profiles?.length && categoryIds?.length) throw new Error("Give profiles or categoryIds, not both.");
         const resolved = profiles?.length ? (await resolveProfileIds(profiles)).ids : categoryIds;
+        const target = calendar ? await resolveGoogleTarget(calendar, startsAt, config.timezone) : undefined;
+        const destination = target
+          ? `Goes to the Google calendar "${target.label}": it shows for everyone who shares that calendar, with Google's default reminders. Delete it later with delete_calendar_event.`
+          : "Goes to Skylight's own calendar: it shows on the Skylight displays and app and is not written to Google.";
         let rrule: string[] | undefined;
         if (repeat) {
           if (allDay) throw new RepeatError("All-day repeating events are not supported yet; use the Skylight app.");
@@ -531,7 +578,7 @@ Related: get_family_members lists the profile names and IDs.`,
                     `PREVIEW, nothing created. "${summary}" would repeat ${repeat.frequency} (every ${repeat.interval ?? 1}), ${dates.length} occurrence${dates.length === 1 ? "" : "s"}, ${startsAt.trim().slice(11, 16)} to ${endsAt.trim().slice(11, 16)} (${config.timezone}).`,
                     `Dates: ${dates.join(", ")}`,
                     profiles?.length ? `Profile: ${profiles.join(", ")}` : "Profile: none",
-                    "Goes to Skylight's own calendar: it shows on the Skylight displays and app and is not written to Google.",
+                    destination,
                     "Conflicts were not checked by this tool; run find_conflicts over these dates first.",
                     "To create it, show this to the person and call again with the same arguments and confirm: true. To undo later: delete_calendar_event with scope \"all\".",
                   ].join("\n"),
@@ -539,8 +586,25 @@ Related: get_family_members lists the profile names and IDs.`,
               ],
             };
           }
+        } else if (target) {
+          if (confirm !== true) {
+            return {
+              content: [
+                {
+                  type: "text" as const,
+                  text: [
+                    `PREVIEW, nothing created. "${summary}", ${startsAt.trim()} to ${endsAt.trim()} (${config.timezone})${allDay ? ", all day" : ""}.`,
+                    profiles?.length ? `Profile: ${profiles.join(", ")}` : "Profile: none",
+                    destination,
+                    "Conflicts were not checked by this tool; run find_conflicts first.",
+                    "To create it, show this to the person and call again with the same arguments and confirm: true.",
+                  ].join("\n"),
+                },
+              ],
+            };
+          }
         } else if (confirm !== undefined) {
-          throw new Error("confirm applies to repeating series only.");
+          throw new Error("confirm applies to repeating series and to events written to a Google calendar only.");
         }
         const event = await createCalendarEvent({
           summary,
@@ -553,6 +617,7 @@ Related: get_family_members lists the profile names and IDs.`,
           timezone: config.timezone,
           kind: "standard",
           ...(rrule ? { rrule } : {}),
+          ...(target ? { calendar_id: target.calendarId, calendar_account_id: target.accountId } : {}),
         });
 
         return {
@@ -560,8 +625,8 @@ Related: get_family_members lists the profile names and IDs.`,
             {
               type: "text" as const,
               text: rrule
-                ? `Created repeating series "${summary}" (ID: ${event.id}, rule ${rrule[0]}). Read it back with get_calendar_events before telling anyone it is done.`
-                : `Created calendar event "${summary}" (ID: ${event.id})`,
+                ? `Created repeating series "${summary}" (ID: ${event.id}, rule ${rrule[0]})${target ? ` on the Google calendar "${target.label}"` : ""}. Read it back with get_calendar_events before telling anyone it is done.`
+                : `Created calendar event "${summary}" (ID: ${event.id})${target ? ` on the Google calendar "${target.label}". Read it back with get_calendar_events before telling anyone it is done` : ""}`,
             },
           ],
         };
