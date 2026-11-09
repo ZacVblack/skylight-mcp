@@ -145,12 +145,13 @@ Returns chores with their assignees, due dates, and completion status.`,
   // create_chore tool
   server.tool(
     "create_chore",
-    `Add a new chore to Skylight.
+    `Add a new one-off chore to Skylight for one family member.
 
 Use this when the user wants to:
-- Add a new task like "empty the dishwasher"
-- Assign chores to family members
-- Create recurring chores
+- Add a task like "empty the dishwasher" on a date
+- Assign a chore to a family member
+
+An assignee is required: Skylight rejects a chore with no profile (HTTP 422). Recurring chores are not supported here (only the routine shape has been captured): use create_routine for repeating tasks.
 
 The chore will appear on the Skylight display.`,
     {
@@ -165,70 +166,34 @@ The chore will appear on the Skylight display.`,
         .describe("Due time (e.g., '10:00 AM', '14:30'). Optional."),
       assignee: z
         .string()
-        .optional()
-        .describe("Family member to assign (e.g., 'Casey', 'Mom', 'Kids')"),
-      recurring: z
-        .boolean()
-        .optional()
-        .default(false)
-        .describe("Is this a recurring chore?"),
-      recurrencePattern: z
-        .string()
-        .optional()
-        .describe("For recurring: 'daily', 'weekly', 'weekdays', or RRULE string"),
+        .describe("Family member's exact profile name (e.g., 'Casey'). Required."),
       rewardPoints: z
         .number()
         .optional()
-        .describe("Reward points for completing this chore"),
+        .describe("Reward points (stars) for completing this chore"),
     },
-    async ({ summary, date, time, assignee, recurring, recurrencePattern, rewardPoints }) => {
+    async ({ summary, date, time, assignee, rewardPoints }) => {
       try {
         const config = getConfig();
         const choreDate = date ? parseDate(date, config.timezone) : getTodayDate(config.timezone);
 
-        // Resolve assignee to category ID
-        let categoryId: string | undefined;
-        if (assignee) categoryId = (await resolveProfile(assignee)).id;
+        // Resolve assignee to category ID (exact name; refuses partial matches)
+        const categoryId = (await resolveProfile(assignee)).id;
 
-        // Convert simple recurrence patterns to RRULE
-        let recurrenceSet: string | undefined;
-        if (recurring && recurrencePattern) {
-          const pattern = recurrencePattern.toLowerCase();
-          if (pattern === "daily") {
-            recurrenceSet = "RRULE:FREQ=DAILY";
-          } else if (pattern === "weekly") {
-            recurrenceSet = "RRULE:FREQ=WEEKLY";
-          } else if (pattern === "weekdays") {
-            recurrenceSet = "RRULE:FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR";
-          } else if (pattern.startsWith("RRULE:")) {
-            recurrenceSet = pattern;
-          } else {
-            recurrenceSet = recurrencePattern;
-          }
-        }
-
-        const chore = await createChore({
+        const created = await createChore({
           summary,
           start: choreDate,
           startTime: time ? parseTime(time) : undefined,
-          categoryId,
-          recurring: recurring ?? false,
-          recurrenceSet,
+          categoryIds: [categoryId],
           rewardPoints,
         });
+        const chore = created[0];
 
         const parts = [
-          `Created chore: "${chore.attributes.summary}"`,
+          `Created chore: "${chore.attributes.summary}" (ID: ${chore.id})`,
           `Date: ${formatDateForDisplay(chore.attributes.start)}${chore.attributes.start_time ? ` at ${chore.attributes.start_time}` : ""}`,
+          `Assigned to: ${assignee}`,
         ];
-
-        if (assignee) {
-          parts.push(`Assigned to: ${assignee}`);
-        }
-
-        if (chore.attributes.recurring) {
-          parts.push(`Recurring: Yes`);
-        }
 
         return {
           content: [

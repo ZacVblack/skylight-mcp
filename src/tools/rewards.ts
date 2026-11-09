@@ -169,7 +169,7 @@ Parameters:
 - pointValue (required): Points needed to redeem this reward
 - description: Additional details about the reward
 - emojiIcon: Emoji to display with the reward
-- assignee: Family member name to assign this reward to
+- assignee (required): Family member's exact profile name. Skylight rejects a reward with no profile (HTTP 422)
 - respawnOnRedemption: If true, reward can be redeemed multiple times
 
 Returns: The created reward details.`,
@@ -178,15 +178,14 @@ Returns: The created reward details.`,
       pointValue: z.number().describe("Points needed to redeem this reward"),
       description: z.string().optional().describe("Additional details about the reward"),
       emojiIcon: z.string().optional().describe("Emoji for the reward (e.g., '🎮')"),
-      assignee: z.string().optional().describe("Family member to assign this reward to"),
+      assignee: z.string().describe("Family member's exact profile name. Required."),
       respawnOnRedemption: z.boolean().optional().default(false).describe("Can be redeemed multiple times"),
     },
     async ({ name, pointValue, description, emojiIcon, assignee, respawnOnRedemption }) => {
       try {
-        let categoryIds: string[] | undefined;
-        if (assignee) categoryIds = [(await resolveProfile(assignee)).id];
+        const categoryIds = [(await resolveProfile(assignee)).id];
 
-        const reward = await createReward({
+        const [reward] = await createReward({
           name,
           pointValue,
           description,

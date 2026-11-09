@@ -10,7 +10,13 @@
  * - Arrays collapse to `[]`: the shape is the union over all elements.
  */
 
+// A long lowercase snake_case word list is a field name, not a token: hiding it as <key> made a real
+// attribute under a newer API version impossible to name. Random tokens contain digits or capitals.
+const FIELD_NAME = /^[a-z]+(_[a-z]+)+$/;
 const DATA_LIKE_KEY = /^\d+$|\d{4}-\d{2}-\d{2}|^[A-Za-z0-9_-]{24,}$/;
+function looksLikeData(key: string): boolean {
+  return DATA_LIKE_KEY.test(key) && !FIELD_NAME.test(key);
+}
 
 function typeOf(value: unknown): string {
   if (value === null) return "null";
@@ -25,7 +31,7 @@ function walk(value: unknown, path: string, out: Set<string>): void {
     for (const item of value) walk(item, `${path}[]`, out);
   } else if (type === "object") {
     for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
-      const safe = DATA_LIKE_KEY.test(key) ? "<key>" : key;
+      const safe = looksLikeData(key) ? "<key>" : key;
       walk(child, path ? `${path}.${safe}` : safe, out);
     }
   }
