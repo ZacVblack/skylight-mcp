@@ -317,7 +317,7 @@ encrypted in the OAuth grant, not in a database you manage.
 
 The hosted server registers all **read and create/update tools**, plus these
 deletes: `delete_chore`, `delete_list`, `delete_list_item`, `delete_reward`,
-`delete_recipe`, `delete_meal_sitting`, `delete_message` and
+`delete_recipe`, `delete_meal_sitting`, `delete_task_box_item`, `delete_message` and
 `delete_calendar_event` (events created in Skylight or on a Google calendar, and repeating ones with an explicit scope; never subscribed feeds). It does **not**
 register `delete_source_calendar`, `delete_label` or photo uploads. The local (stdio) server
 registers everything. This is a deliberate choice, not a limitation of the Worker:
@@ -525,6 +525,7 @@ Messages are the notes shown on the frame (Skylight's web app calls them "nudges
 |------|--------|-------------|
 | `get_task_box` | read | List the task box: reusable chore and routine templates (no assignee or date) |
 | `create_task` | write | Add a template to the task box |
+| `delete_task_box_item` | destructive | Delete one Task Box template by ID (shown by `get_task_box`). Previews unless `confirm: true`; the preview lists same-name scheduled chores as "link unverified" (a template and a scheduled chore are separate records, and nothing is matched by name). Reads the Task Box back to confirm it is gone. |
 
 ### List Tools
 

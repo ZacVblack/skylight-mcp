@@ -33,7 +33,7 @@ describe("hosted MCP handler", () => {
     expect(names).toContain("create_calendar_event");
     // Only the deliberately allowlisted deletes are on the hosted server (preview-first, confirm: true).
     expect(names.filter((n) => n.startsWith("delete_")).sort()).toEqual(
-      ["delete_calendar_event", "delete_chore", "delete_list", "delete_list_item", "delete_meal_sitting", "delete_message", "delete_recipe", "delete_reward"]
+      ["delete_calendar_event", "delete_chore", "delete_list", "delete_list_item", "delete_meal_sitting", "delete_message", "delete_recipe", "delete_reward", "delete_task_box_item"]
     );
     expect(names).not.toContain("delete_source_calendar");
     expect(names).not.toContain("get_albums");

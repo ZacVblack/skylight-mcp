@@ -59,3 +59,14 @@ export async function listTaskBoxItems(): Promise<TaskBoxItemResource[]> {
   }
   return response.data;
 }
+
+/**
+ * Delete a Task Box template: `DELETE /task_box/items/{id}` (captured from the web app: 204, no body,
+ * no query). Chores already scheduled from the template are not touched (observed for a one-off chore).
+ */
+export async function deleteTaskBoxItem(itemId: string): Promise<void> {
+  const client = getClient();
+  await client.request(`/api/frames/{frameId}/task_box/items/${encodeURIComponent(itemId)}`, {
+    method: "DELETE",
+  });
+}

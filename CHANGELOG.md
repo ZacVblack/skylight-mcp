@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- `delete_task_box_item`: delete one Task Box template by ID. When a chore is added in the Skylight app with "Save to Task Box" ticked, the app also saves a template, and neither record points at the other, so deleting the chore left the template behind (and deleting a template leaves already-scheduled chores alone, checked live on 2026-11-08 for a one-off chore). The tool deletes exactly the ID it is given, never by name; the preview names the template and lists same-name scheduled chores over the next 90 days as "link unverified"; it needs `confirm: true` and reads the Task Box back to confirm. `DELETE /task_box/items/{id}` is 204 with no body (captured from the web app). It is on the hosted delete allowlist (now nine entries). `get_task_box` now shows each item's ID. Not verified: the tool against the real API (the capture came from the app); deleting a routine template and what, if anything, that does to a habit tracker.
+
 ### Fixed
 - `update_calendar_event` with scope `one` on a series no longer prints an ID for the detached event. Skylight's reply carries the series occurrence's ID, not the new event's, so the old message pointed a caller at the wrong event; it now says to read the new ID back with `get_calendar_events`. Checked live on 2026-11-08: a time change with scope `one` detached only that occurrence and left the rest of the series alone (scope `all` was verified earlier the same day), so the "not tried live" caveat on scope `one` is gone from the tool description and README.
 
