@@ -27,6 +27,7 @@ export const HOSTED_DESTRUCTIVE_ALLOWLIST: readonly string[] = [
   "delete_reward",
   "delete_recipe",
   "delete_meal_sitting",
+  "delete_task_box_item",
 ];
 
 export async function handleMcpRequest(

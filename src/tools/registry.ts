@@ -62,6 +62,7 @@ export const TOOL_EFFECTS: Readonly<Record<string, ToolEffect>> = {
   // tasks
   get_task_box: "read",
   create_task: "write",
+  delete_task_box_item: "destructive",
   // family / misc
   get_family_members: "read",
   get_avatars: "read",
