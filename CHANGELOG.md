@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- `create_calendar_event` with `calendar`: the Google account id is now accepted as a string or a number (it was string-only), and a refusal says how many events it looked at, how many carried a calendar address and what type the account id had (counts and types only, never ids). Found on the first live run, where a refusal gave no way to tell a missing event from a misread field.
+
 ## [1.18.0] - 2026-11-09
 
 ### Added

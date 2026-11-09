@@ -277,7 +277,7 @@ export interface CreateCalendarEventRequest {
   description?: string;
   location?: string;
   category_ids?: string[];
-  calendar_account_id?: string;
+  calendar_account_id?: string | number;
   calendar_id?: string;
   rrule?: string[] | null;
   timezone?: string;

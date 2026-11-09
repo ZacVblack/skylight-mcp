@@ -93,7 +93,7 @@ const GOOGLE_LOOKAROUND_DAYS = 90;
  * near the new event's date. Refuses rather than guesses. Ids stay inside the call: only the
  * label is ever shown.
  */
-async function resolveGoogleTarget(name: string, startsAt: string, tz: string): Promise<{ label: string; calendarId: string; accountId: string }> {
+async function resolveGoogleTarget(name: string, startsAt: string, tz: string): Promise<{ label: string; calendarId: string; accountId: string | number }> {
   const want = name.trim().toLowerCase();
   const gmail = (await getSourceCalendars()).filter((c) => c.attributes.kind === "gmail");
   const labelOf = (c: (typeof gmail)[number]) => String(c.attributes.label ?? "").trim();
@@ -115,13 +115,23 @@ async function resolveGoogleTarget(name: string, startsAt: string, tz: string): 
     dateMax: iso(centre + GOOGLE_LOOKAROUND_DAYS * 86_400_000),
     timezone: tz,
   });
+  // Skylight may send the account id as a string or a number; accept either, send it back as given.
+  let onCalendar = 0;
+  const idKinds = new Set<string>();
   for (const e of events) {
     const a = e.attributes as Record<string, unknown>;
-    if (a.calendar_id === calendarId && typeof a.calendar_account_id === "string" && a.calendar_account_id) {
-      return { label: labelOf(cal), calendarId, accountId: a.calendar_account_id };
+    if (a.calendar_id !== calendarId) continue;
+    onCalendar++;
+    const acct = a.calendar_account_id;
+    if ((typeof acct === "string" && acct !== "") || typeof acct === "number") {
+      return { label: labelOf(cal), calendarId, accountId: acct };
     }
+    idKinds.add(acct === null ? "null" : typeof acct);
   }
-  throw new Error(`Cannot write to "${labelOf(cal)}": no existing event on it within ${GOOGLE_LOOKAROUND_DAYS} days of the new event, so its account cannot be determined. Add one event to it in the Skylight app, or ask without a calendar to use Skylight's own calendar. Nothing was created.`);
+  // Counts and types only, never ids: this is what tells a missing event from a field we misread.
+  const withCalendarId = events.filter((e) => (e.attributes as Record<string, unknown>).calendar_id !== undefined).length;
+  const detail = `Looked at ${events.length} events, ${withCalendarId} carry a calendar address, ${onCalendar} are on this calendar${onCalendar > 0 ? ` (account id seen as: ${[...idKinds].join(", ") || "none"})` : ""}.`;
+  throw new Error(`Cannot write to "${labelOf(cal)}": no usable existing event on it within ${GOOGLE_LOOKAROUND_DAYS} days of the new event, so its account cannot be determined. ${detail} Add one event to it in the Skylight app, or ask without a calendar to use Skylight's own calendar. Nothing was created.`);
 }
 
 function joinNames(names: string[]): string {
