@@ -28,7 +28,7 @@ type Post = { url: string; body: Record<string, unknown> };
 const GCAL = "family-secret-addr@group.calendar.example.com";
 const ACCT = "acct-secret-77";
 
-function stub(opts: { withEvent?: boolean; acct?: unknown } = {}) {
+function stub(opts: { withEvent?: boolean; acct?: unknown; relOnly?: boolean } = {}) {
   const posts: Post[] = [];
   const urls: string[] = [];
   const withEvent = opts.withEvent ?? true;
@@ -53,6 +53,11 @@ function stub(opts: { withEvent?: boolean; acct?: unknown } = {}) {
         return new Response(JSON.stringify({ data: { id: "99-1900000000", type: "calendar_event", attributes: {} } }), { status: 200 });
       }
       if (u.includes("/calendar_events")) {
+        if (opts.relOnly) {
+          const wantsAccount = u.includes("calendar_account");
+          const ev = { id: "5", type: "calendar_event", attributes: { summary: "Existing", source: "google", calendar_id: GCAL }, ...(wantsAccount ? { relationships: { calendar_account: { data: { type: "calendar_account", id: "rel-acct-9" } } } } : {}) };
+          return new Response(JSON.stringify({ data: [ev] }), { status: 200 });
+        }
         const data = withEvent
           ? [{ id: "5", type: "calendar_event", attributes: { summary: "Existing", source: "google", calendar_id: GCAL, calendar_account_id: "acct" in opts ? opts.acct : ACCT } }, { id: "7", type: "calendar_event", attributes: { summary: "RO", source: "google", calendar_id: "ro@group.calendar.example.com", calendar_account_id: ACCT } }]
           : [{ id: "6", type: "calendar_event", attributes: { summary: "Other", source: "skylight" } }];
@@ -179,6 +184,12 @@ describe("create_calendar_event with calendar (Google target)", () => {
     expect(out.text).not.toContain(GCAL);
     expect(out.text).not.toContain(ACCT);
     expect(s.posts).toEqual([]);
+  });
+
+  it("reads the account from the calendar_account relationship, which only appears when asked for", async () => {
+    const s = stub({ relOnly: true });
+    await call({ ...one, confirm: true });
+    expect(s.posts[0]!.body.calendar_account_id).toBe("rel-acct-9");
   });
 
   it("every request still goes to the pinned host", async () => {

@@ -114,6 +114,9 @@ async function resolveGoogleTarget(name: string, startsAt: string, tz: string): 
     dateMin: iso(centre - GOOGLE_LOOKAROUND_DAYS * 86_400_000),
     dateMax: iso(centre + GOOGLE_LOOKAROUND_DAYS * 86_400_000),
     timezone: tz,
+    // The account is a relationship, present only when asked for (the web app asks for it too);
+    // the event's attributes do not carry it (seen live 2026-11-09).
+    include: "categories,calendar_account",
   });
   // Skylight may send the account id as a string or a number; accept either, send it back as given.
   let onCalendar = 0;
@@ -122,7 +125,8 @@ async function resolveGoogleTarget(name: string, startsAt: string, tz: string): 
     const a = e.attributes as Record<string, unknown>;
     if (a.calendar_id !== calendarId) continue;
     onCalendar++;
-    const acct = a.calendar_account_id;
+    const rel = (e as { relationships?: { calendar_account?: { data?: { id?: unknown } | null } } }).relationships?.calendar_account?.data;
+    const acct = rel?.id ?? a.calendar_account_id;
     if ((typeof acct === "string" && acct !== "") || typeof acct === "number") {
       return { label: labelOf(cal), calendarId, accountId: acct };
     }
