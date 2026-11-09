@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- `create_calendar_event` takes `calendar`: the name of a linked Google calendar (a `gmail` source from `get_source_calendars`). Without it nothing changes: events and series go to Skylight's own calendar and do not appear in Google. With it the event (one-off or series) is written to that Google calendar, so everyone who shares it sees it. It is only previewed until `confirm: true`, and the preview names the calendar. The calendar address and account id never appear in any output. Refused, with nothing sent: an unknown or ambiguous name, a read-only calendar, a subscription feed, and a calendar with no existing event within 90 days of the new one (its account id is taken from such an event; Skylight's source-calendar record does not carry it). Decision D5. Not verified live: the real create against Google, and that the account id taken from an existing event is the one Skylight expects.
+
 ## [1.17.1] - 2026-11-08
 
 ### Fixed
