@@ -4,7 +4,6 @@ import type {
   ChoreResponse,
   ChoreResource,
   CategoryResource,
-  CreateChoreRequest,
   UpdateChoreRequest,
 } from "../types.js";
 
@@ -62,54 +61,42 @@ export interface CreateChoreOptions {
   summary: string;
   start: string;
   startTime?: string;
-  status?: string;
-  recurring?: boolean;
-  recurrenceSet?: string;
-  categoryId?: string;
+  /** Profile (category) ids. The API requires at least one: without it Skylight answers 422 "Category is required." */
+  categoryIds: string[];
   rewardPoints?: number;
   emojiIcon?: string;
 }
 
 /**
- * Create a new chore
+ * Create a one-off chore: `POST /chores/create_multiple` with a flat body (captured from the web app,
+ * success case). Skylight returns an array, one chore per profile; the first is returned here.
+ * Recurrence is not sent: only the routine shape has been captured.
  */
-export async function createChore(options: CreateChoreOptions): Promise<ChoreResource> {
+export async function createChore(options: CreateChoreOptions): Promise<ChoreResource[]> {
   const client = getClient();
-
-  const request: CreateChoreRequest = {
-    data: {
-      type: "chore",
-      attributes: {
-        summary: options.summary,
-        start: options.start,
-        start_time: options.startTime ?? null,
-        status: options.status ?? "pending",
-        recurring: options.recurring ?? false,
-        recurrence_set: options.recurrenceSet ?? null,
-        reward_points: options.rewardPoints ?? null,
-        emoji_icon: options.emojiIcon ?? null,
-      },
-    },
+  const body: Record<string, unknown> = {
+    summary: options.summary,
+    start: options.start,
+    start_time: options.startTime ?? null,
+    category_ids: options.categoryIds,
+    routine: false,
+    up_for_grabs: false,
+    recurrence_set: null,
+    recurring_until: null,
+    renewal_interval: null,
+    renewal_unit: null,
   };
+  // reward_points is verified for one-off chores (web app capture, 1 star). emoji_icon is known from the routine capture only. Both are sent only when asked for.
+  if (options.rewardPoints !== undefined) body.reward_points = options.rewardPoints;
+  if (options.emojiIcon !== undefined) body.emoji_icon = options.emojiIcon;
 
-  // Add category relationship if provided
-  if (options.categoryId) {
-    request.data.relationships = {
-      category: {
-        data: {
-          type: "category",
-          id: options.categoryId,
-        },
-      },
-    };
-  }
-
-  const response = await client.post<ChoreResponse>(
-    "/api/frames/{frameId}/chores",
-    request
-  );
-
-  return response.data;
+  const response = await client.request<{ data?: ChoreResource[] }>("/api/frames/{frameId}/chores/create_multiple", {
+    method: "POST",
+    body,
+  });
+  const created = response.data ?? [];
+  if (created.length === 0) throw new Error("Skylight accepted the chore but returned no chore; check get_chores before retrying.");
+  return created;
 }
 
 export interface UpdateChoreOptions {

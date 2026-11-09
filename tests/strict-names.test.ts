@@ -47,6 +47,7 @@ function stub(): Seen[] {
       if (u.includes("/categories")) return new Response(JSON.stringify(categories), { status: 200 });
       if (method === "GET" && u.includes("/chores")) return new Response(JSON.stringify(choreList), { status: 200 });
       if (method === "GET") return new Response(JSON.stringify({ data: [] }), { status: 200 });
+      if (u.includes("create_multiple")) return new Response(JSON.stringify({ data: [ok.data] }), { status: 200 });
       return new Response(JSON.stringify(ok), { status: 200 });
     })
   );
@@ -64,8 +65,8 @@ describe("strict profile names", () => {
     const seen = stub();
     const out = await call("create_chore", { summary: "Dishes", date: "2026-11-03", assignee: "alex" });
     expect(out.isError).toBe(false);
-    expect(writes(seen)[0]!.body).toContain('"id":"11"');
-    expect(writes(seen)[0]!.body).not.toContain('"id":"12"');
+    expect(writes(seen)[0]!.body).toContain('"category_ids":["11"]');
+    expect(writes(seen)[0]!.body).not.toContain('"12"');
   });
 
   it("create_chore with a partial name fails, lists the profiles, and writes nothing", async () => {

@@ -6,7 +6,6 @@ import type {
   RewardResponse,
   RewardPointsResponse,
   RewardPointResource,
-  CreateRewardRequest,
   UpdateRewardRequest,
 } from "../types.js";
 
@@ -44,38 +43,34 @@ export interface CreateRewardOptions {
   pointValue: number;
   description?: string;
   emojiIcon?: string;
-  categoryIds?: string[];
+  /** Profile (category) ids. The API requires at least one: without it Skylight answers 422 "Category ids is required." */
+  categoryIds: string[];
   respawnOnRedemption?: boolean;
 }
 
 /**
- * Create a new reward
+ * Create a reward: `POST /rewards` with a flat body (captured from the web app, success case, 201).
+ * Skylight returns an array, one reward per profile.
  */
-export async function createReward(options: CreateRewardOptions): Promise<RewardResource> {
+export async function createReward(options: CreateRewardOptions): Promise<RewardResource[]> {
   const client = getClient();
-  const request: CreateRewardRequest = {
-    data: {
-      type: "reward",
-      attributes: {
-        name: options.name,
-        point_value: options.pointValue,
-        description: options.description ?? null,
-        emoji_icon: options.emojiIcon ?? null,
-        respawn_on_redemption: options.respawnOnRedemption ?? false,
-      },
-    },
+  const body: Record<string, unknown> = {
+    name: options.name,
+    point_value: options.pointValue,
+    respawn_on_redemption: options.respawnOnRedemption ?? false,
+    category_ids: options.categoryIds,
   };
+  // Key names for these two were not in the capture (left blank in the app); sent only when asked for.
+  if (options.description !== undefined) body.description = options.description;
+  if (options.emojiIcon !== undefined) body.emoji_icon = options.emojiIcon;
 
-  if (options.categoryIds && options.categoryIds.length > 0) {
-    request.data.relationships = {
-      categories: {
-        data: options.categoryIds.map((id) => ({ type: "category", id })),
-      },
-    };
-  }
-
-  const response = await client.post<RewardResponse>("/api/frames/{frameId}/rewards", request);
-  return response.data;
+  const response = await client.request<{ data?: RewardResource[] }>("/api/frames/{frameId}/rewards", {
+    method: "POST",
+    body,
+  });
+  const created = response.data ?? [];
+  if (created.length === 0) throw new Error("Skylight accepted the reward but returned no reward; check get_rewards before retrying.");
+  return created;
 }
 
 export interface UpdateRewardOptions {

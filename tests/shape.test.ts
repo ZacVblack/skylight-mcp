@@ -51,6 +51,22 @@ describe("shape fingerprint", () => {
   });
 });
 
+describe("long field names versus tokens", () => {
+  it("keeps a long lowercase snake_case field name so a new attribute can be named", () => {
+    const joined = [...shapeOf({ attributes: { completed_by_habit_tracker_entry: null } })].join("\n");
+    expect(joined).toContain("completed_by_habit_tracker_entry");
+    expect(joined).not.toContain("<key>");
+  });
+
+  it("still hides token-like keys, even with underscores, digits or capitals", () => {
+    const joined = [...shapeOf({ Ab3_Xk9_Qz7_Lm2_Pw8_Rt5_Yu1: 1, abcdefghijklmnopqrstuvwxyz: 1, "9f8e7d6c5b4a39281706f5e4d3c2b1a0": 1 })].join("\n");
+    expect(joined).not.toContain("Xk9");
+    expect(joined).not.toContain("abcdefghij");
+    expect(joined).not.toContain("9f8e7d6c");
+    expect(joined).toContain("<key>");
+  });
+});
+
 describe("itemCount", () => {
   it("counts a data array, empty or not", () => {
     expect(itemCount({ data: [] })).toBe(0);
