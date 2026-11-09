@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.17.0] - 2026-11-08
+
 ### Added
 - `delete_task_box_item`: delete one Task Box template by ID. When a chore is added in the Skylight app with "Save to Task Box" ticked, the app also saves a template, and neither record points at the other, so deleting the chore left the template behind (and deleting a template leaves already-scheduled chores alone, checked live on 2026-11-08 for a one-off chore). The tool deletes exactly the ID it is given, never by name; the preview names the template and lists same-name scheduled chores over the next 90 days as "link unverified"; it needs `confirm: true` and reads the Task Box back to confirm. `DELETE /task_box/items/{id}` is 204 with no body (captured from the web app). It is on the hosted delete allowlist (now nine entries). `get_task_box` now shows each item's ID. Not verified: the tool against the real API (the capture came from the app); deleting a routine template and what, if anything, that does to a habit tracker.
 
