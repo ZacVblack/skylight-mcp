@@ -596,7 +596,7 @@ Parameters:
 REPEATING EVENTS (the id looks like 12345-1804032000): also give
 - date (required): the occurrence's date, YYYY-MM-DD, from get_calendar_events
 - scope (required): "one" changes only that occurrence (it becomes its own event, detached from the series); "all" changes the whole series AND overwrites any earlier edit made to a single occurrence. There is no "future" scope: Skylight's API refuses it, so do not offer it.
-For a repeating event only the title (summary), the family member assignment and the time of day (startsAt and endsAt, both on the occurrence's date) can be changed here; notes, location and all-day edits on a series have not been verified, so make those in the Skylight app. A time change with scope "all" is verified live (every occurrence moved, still one series; occurrence ids change because they embed the start time, so re-read before the next call). A time change with scope "one" has not been tried live.
+For a repeating event only the title (summary), the family member assignment and the time of day (startsAt and endsAt, both on the occurrence's date) can be changed here; notes, location and all-day edits on a series have not been verified, so make those in the Skylight app. A time change is verified live for both scopes: "all" moves every occurrence and keeps one series; "one" detaches that occurrence as its own event at the new time and leaves the rest of the series alone. Ids change (series occurrence ids embed the start time; a detached event gets a new plain id), so always re-read before the next call.
 Events on a Google calendar are updated at Google too, for everyone who shares that calendar.
 
 Returns: The updated event details.`,
@@ -672,7 +672,7 @@ Returns: The updated event details.`,
           const updated = await updateCalendarEvent(eventId, updates, scope);
           const newTitle = String((updated.attributes as Record<string, unknown>).summary ?? title);
           const what = scope === "one"
-            ? `only the occurrence on ${date}; it is now its own event (ID: ${updated.id}), detached from the series`
+            ? `only the occurrence on ${date}; it is now its own event, detached from the series. Skylight's reply does not carry the new event's ID, so read it back with get_calendar_events (the ID changes) before editing or deleting it`
             : `the whole series (every occurrence, including any that had been edited on their own)`;
           return {
             content: [{ type: "text" as const, text: `Updated "${title}" to "${newTitle}": ${what}.` }],

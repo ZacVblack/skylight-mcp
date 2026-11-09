@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- `update_calendar_event` with scope `one` on a series no longer prints an ID for the detached event. Skylight's reply carries the series occurrence's ID, not the new event's, so the old message pointed a caller at the wrong event; it now says to read the new ID back with `get_calendar_events`. Checked live on 2026-11-08: a time change with scope `one` detached only that occurrence and left the rest of the series alone (scope `all` was verified earlier the same day), so the "not tried live" caveat on scope `one` is gone from the tool description and README.
+
 ## [1.16.0] - 2026-11-08
 
 ### Added

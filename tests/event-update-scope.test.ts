@@ -95,7 +95,10 @@ describe("update_calendar_event on repeating events (scope)", () => {
     stub([ev(SERIES_ID)]);
     const one = await call("update_calendar_event", { eventId: SERIES_ID, date, scope: "one", summary: "Practice 2" });
     expect(one.text).toContain("detached from the series");
-    expect(one.text).toContain("14553525362");
+    // Skylight's reply carries the series occurrence's id, not the detached event's: never print it as the new id.
+    expect(one.text).not.toContain("14553525362");
+    expect(one.text).not.toContain(SERIES_ID);
+    expect(one.text).toContain("get_calendar_events");
     const all = await call("update_calendar_event", { eventId: SERIES_ID, date, scope: "all", summary: "Practice 3" });
     expect(all.text).toContain("whole series");
     expect(all.text).toContain("edited on their own");
