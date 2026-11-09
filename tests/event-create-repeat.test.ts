@@ -91,7 +91,6 @@ describe("create_calendar_event with repeat", () => {
   });
 
   it.each([
-    ["all-day", { allDay: true }],
     ["two profiles", { profiles: ["Alex", "Jordan"] }],
     ["offset in startsAt", { startsAt: "2037-03-03T16:00:00-08:00" }],
     ["date-only start", { startsAt: "2037-03-03", endsAt: "2037-03-03" }],
@@ -112,5 +111,48 @@ describe("create_calendar_event with repeat", () => {
     const out = await call({ summary: "Dentist", startsAt: "2037-03-03T16:00", endsAt: "2037-03-03T17:00", confirm: true });
     expect(out.isError).toBe(true);
     expect(s.posts).toEqual([]);
+  });
+
+  describe("all-day series", () => {
+    const ad = { summary: "No school", startsAt: "2037-03-03", endsAt: "2037-03-04", allDay: true, repeat: { frequency: "weekly", count: 3 } };
+
+    it("previews the dates as all day and sends nothing without confirm", async () => {
+      const s = stub();
+      const out = await call(ad);
+      expect(out.isError).toBe(false);
+      expect(out.text).toContain("PREVIEW, nothing created");
+      expect(out.text).toContain("all day");
+      expect(out.text).toContain("2037-03-03, 2037-03-10, 2037-03-17");
+      expect(s.posts).toEqual([]);
+    });
+
+    it("with confirm: date-only start and next-day end, all_day true, UNTIL date rule, no calendar fields", async () => {
+      const s = stub();
+      const out = await call({ ...ad, confirm: true, profiles: ["Alex"] });
+      expect(out.isError).toBe(false);
+      expect(s.posts).toHaveLength(1);
+      const b = s.posts[0]!.body;
+      expect(b.all_day).toBe(true);
+      expect(b.starts_at).toBe("2037-03-03");
+      expect(b.ends_at).toBe("2037-03-04");
+      expect(b.timezone).toBe("America/Los_Angeles");
+      expect(b.rrule).toEqual(["RRULE:FREQ=WEEKLY;INTERVAL=1;UNTIL=20370317T235959Z;WKST=SU;BYDAY=TU"]);
+      expect(b.category_ids).toEqual(["11"]);
+      expect(b).not.toHaveProperty("calendar_id");
+    });
+
+    it.each([
+      ["a time in startsAt", { startsAt: "2037-03-03T09:00" }],
+      ["a multi-day occurrence", { endsAt: "2037-03-06" }],
+      ["end equal to start", { endsAt: "2037-03-03" }],
+      ["a past date", { startsAt: "2020-03-03", endsAt: "2020-03-04" }],
+      ["two profiles", { profiles: ["Alex", "Jordan"] }],
+      ["no end condition", { repeat: { frequency: "weekly" } }],
+    ])("refuses %s and sends nothing, even with confirm", async (_n, over) => {
+      const s = stub();
+      const out = await call({ ...ad, confirm: true, ...over });
+      expect(out.isError).toBe(true);
+      expect(s.posts).toEqual([]);
+    });
   });
 });

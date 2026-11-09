@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- `create_calendar_event` allows an all-day repeating series (`allDay: true` with `repeat`). Give `startsAt` and `endsAt` as dates `YYYY-MM-DD`, `endsAt` being the day after `startsAt` (one day per occurrence; the end is exclusive, as in the Skylight app). The request carries date-only start and end, `all_day: true`, and the same UNTIL-date rule as a timed series; it may start today. Multi-day occurrences and more than one profile are still refused. Shape taken from the captured app request (issue #62); not verified live: whether Skylight accepts the UNTIL, and that occurrences read back as all-day.
+
 ## [1.17.1] - 2026-11-08
 
 ### Fixed
