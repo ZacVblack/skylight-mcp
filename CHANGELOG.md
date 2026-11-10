@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Library entry (experimental): `import { createSkylight } from "@davidwoods/skylight-mcp"`. Read-only Phase 1: calendar events and sources, profiles, chores, meal sittings, recipes and categories, lists and list items, returned as plain objects with no emails, uids, calendar or account ids, or feed addresses. The API host is pinned and cannot be configured. Not verified against the live API.
+
+### Changed
+- **Breaking for anyone who imported the package root:** `main` now points to the library (`dist/lib.js`) and an `exports` map makes it the only importable module, so deep imports such as `@davidwoods/skylight-mcp/dist/api/client.js` no longer resolve. The CLI and both MCP servers still run through `bin` (`dist/index.js`) and are unaffected.
+
 ## [1.18.1] - 2026-11-09
 
 ### Fixed

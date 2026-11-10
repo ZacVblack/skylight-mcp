@@ -48,6 +48,15 @@ secrets and never commit them:
    **push protection** (Settings → Code security). Both are on by default
    for public repos.
 
+## Library entry (experimental)
+
+The package root (`dist/lib.js`) is the only importable module; `exports` lists nothing else. What an importer can rely on, each checked by `tests/library-importer.test.ts` against the packed package:
+- The API host is pinned in code. There is no host, base URL or fetch option, and an unknown option is refused. Every request carries the token to `app.ourskylight.com` only.
+- Results are plain objects built field by field. Event uids, owner and invited emails, calendar and account ids, subscription feed addresses and email-shaped calendar labels never appear in them.
+- No exported function accepts a URL or a feed address, and none writes, deletes, sends a message, manages a source calendar or logs in.
+- Importing the module starts nothing and does not read `process.argv`.
+Limit: an importer holds a live bearer token and can do whatever the token allows. These guards stop accidents and token leakage, not a malicious importer.
+
 ## Hosted server (Cloudflare Workers)
 
 > [!CAUTION]

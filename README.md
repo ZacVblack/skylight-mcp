@@ -590,6 +590,26 @@ Needs Skylight Plus. Local server only.
 |------|--------|-------------|
 | `get_albums` | read | Photo albums |
 
+## Use as a library (experimental)
+
+The package root is a small read-only library for apps such as a family display. It is **experimental**: breaking changes are allowed in minor versions, and are documented in the changelog, until a real app has used it for a while. The CLI and the MCP servers are unchanged (`skylight-mcp` runs `dist/index.js`).
+
+```ts
+import { createSkylight } from "@davidwoods/skylight-mcp";
+
+const skylight = createSkylight({
+  frameId: "your_frame_id",
+  timezone: "America/Los_Angeles",
+  credential: yourCredentialStore, // or { token: "..." } for a fixed token that does not refresh
+});
+
+const events = await skylight.calendar.events({ from: "2026-11-09", to: "2026-11-15" });
+```
+
+Read methods only: `calendar.events`, `calendar.sources`, `profiles.list`, `chores.list`, `meals.sittings`, `meals.recipes`, `meals.categories`, `lists.list`, `lists.items`. They return plain objects, never raw Skylight records: no emails, event uids, calendar or account ids, or subscription feed addresses (a feed shows only its host; an email-shaped calendar label is replaced). Event ids are opaque: a repeating event's occurrence ids change after a time edit, so do not store or compare them.
+
+What is not there, on purpose: writes, deletes, messages, source-calendar and feed management, login, and any function that takes a URL or a feed address. There is no host or fetch option; the API host is fixed in code and an unknown option is refused. Only the package root is importable (deep imports such as `dist/api/client.js` fail). The library holds a live sign-in, so it stops accidents and token leaks, not a malicious importer. Not verified against the live API yet.
+
 ## Skylight API calls used
 
 All calls go to `https://app.ourskylight.com/api` (pinned in code). `{f}` is the frame ID. "Live" means run against a real frame by this project; everything else came from upstream and has not been re-run. Messages and meal edit/delete send `Skylight-Api-Version: 2026-10-15`, the version the web app sends; other calls use the client default.

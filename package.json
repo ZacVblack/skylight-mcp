@@ -3,7 +3,7 @@
   "version": "1.18.1",
   "description": "Unofficial MCP server for Skylight Calendar: local (stdio) and hosted (Cloudflare Workers), with browser-paste OAuth sign-in and an encrypted credential store",
   "type": "module",
-  "main": "dist/index.js",
+  "main": "dist/lib.js",
   "bin": {
     "skylight-mcp": "dist/index.js"
   },
@@ -74,5 +74,13 @@
   "homepage": "https://github.com/dwooods/skylight-mcp#readme",
   "bugs": {
     "url": "https://github.com/dwooods/skylight-mcp/issues"
+  },
+  "types": "dist/lib.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/lib.d.ts",
+      "default": "./dist/lib.js"
+    },
+    "./package.json": "./package.json"
   }
 }
