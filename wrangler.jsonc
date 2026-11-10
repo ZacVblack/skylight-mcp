@@ -9,7 +9,7 @@
   "observability": { "enabled": true },
   "kv_namespaces": [
     // Create with: npx wrangler kv namespace create OAUTH_KV   (then paste the id here)
-    { "binding": "OAUTH_KV", "id": "REPLACE_WITH_KV_NAMESPACE_ID" }
+    { "binding": "OAUTH_KV", "id": "93cb0e11f9714d6e89365ff65d8e7f8e" }
   ],
   // The change counter (60 changes and 10 deletes per hour per frame). Without this
   // binding the Worker still runs but counts in memory, which limits nothing across requests.
@@ -18,7 +18,7 @@
   },
   "migrations": [{ "tag": "v1-write-limiter", "new_sqlite_classes": ["WriteLimiter"] }],
   "vars": {
-    "DEFAULT_TIMEZONE": "America/Los_Angeles"
+    "DEFAULT_TIMEZONE": "America/New_York"
   }
   // Set with `npx wrangler secret put <NAME>`, never in this file:
   //   SETUP_PASSPHRASE  12+ chars; required on the consent page to link an account
