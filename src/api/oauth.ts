@@ -46,10 +46,15 @@ export interface PendingLogin {
   createdAt: number;
 }
 
+/** Why a login step failed, for callers that write their own message (the library setup entry). */
+export type OAuthErrorKind = "expired" | "bad_url" | "state" | "token";
+
 export class OAuthError extends Error {
-  constructor(message: string) {
+  readonly kind: OAuthErrorKind;
+  constructor(message: string, kind: OAuthErrorKind = "token") {
     super(message);
     this.name = "OAuthError";
+    this.kind = kind;
   }
 }
 
@@ -128,36 +133,36 @@ function safeEqual(a: string, b: string): boolean {
 /** Extract and validate the authorization code from the pasted callback URL. */
 export function parseCallbackUrl(callbackUrl: string, pending: PendingLogin, now: number = Date.now()): string {
   if (now - pending.createdAt > PENDING_LOGIN_TTL_MS) {
-    throw new OAuthError("The login attempt expired. Run `skylight-mcp auth login` again.");
+    throw new OAuthError("The login attempt expired. Run `skylight-mcp auth login` again.", "expired");
   }
 
   let callback: URL;
   try {
     callback = new URL(callbackUrl.trim());
   } catch {
-    throw new OAuthError("Paste the complete URL shown in your browser after signing in.");
+    throw new OAuthError("Paste the complete URL shown in your browser after signing in.", "bad_url");
   }
 
   const expected = new URL(REDIRECT_URI);
   if (callback.protocol !== "https:" || callback.hostname !== expected.hostname || callback.pathname !== expected.pathname) {
-    throw new OAuthError(`The URL must start with ${REDIRECT_URI}.`);
+    throw new OAuthError(`The URL must start with ${REDIRECT_URI}.`, "bad_url");
   }
 
   const error = callback.searchParams.get("error");
   if (error) {
-    throw new OAuthError(`Skylight returned an error during sign-in: ${error.slice(0, 100)}`);
+    throw new OAuthError(`Skylight returned an error during sign-in: ${error.slice(0, 100)}`, "bad_url");
   }
 
   const code = callback.searchParams.get("code");
   const state = callback.searchParams.get("state");
   if (!code || !state) {
-    throw new OAuthError("The URL did not contain a code and state. Run `skylight-mcp auth login` again.");
+    throw new OAuthError("The URL did not contain a code and state. Run `skylight-mcp auth login` again.", "bad_url");
   }
   if (code.length > MAX_FIELD_LENGTH || state.length > MAX_FIELD_LENGTH) {
-    throw new OAuthError("The URL contained an unexpectedly long value.");
+    throw new OAuthError("The URL contained an unexpectedly long value.", "bad_url");
   }
   if (!safeEqual(state, pending.state)) {
-    throw new OAuthError("State mismatch: this URL does not belong to the pending login. Run `skylight-mcp auth login` again.");
+    throw new OAuthError("State mismatch: this URL does not belong to the pending login. Run `skylight-mcp auth login` again.", "state");
   }
   return code;
 }

@@ -53,9 +53,10 @@ secrets and never commit them:
 The package root (`dist/lib.js`) is the only importable module; `exports` lists nothing else. What an importer can rely on, each checked by `tests/library-importer.test.ts` against the packed package:
 - The API host is pinned in code. There is no host, base URL or fetch option, and an unknown option is refused. Every request carries the token to `app.ourskylight.com` only.
 - Results are plain objects built field by field. Event uids, owner and invited emails, calendar and account ids, subscription feed addresses and email-shaped calendar labels never appear in them.
-- No exported function accepts a URL or a feed address, and none writes, deletes, sends a message, manages a source calendar or logs in.
+- No function on the package root accepts a URL or a feed address, and none writes, deletes, sends a message, manages a source calendar or logs in.
 - Importing the module starts nothing and does not read `process.argv`.
-Limit: an importer holds a live bearer token and can do whatever the token allows. These guards stop accidents and token leakage, not a malicious importer.
+- The setup entry (`/setup`) is the only other importable module. It signs in with the browser-paste flow (PKCE S256, state check, a pending sign-in that works once and for ten minutes) and writes the credential straight into the importer's store: no function returns a token, the verifier or the code. It accepts exactly one address, the pasted Skylight redirect (pinned web origin, path `/welcome`, no user info, no other port); anything else is refused before any request and never echoed. Errors use the library's own wording, never Skylight's response text. It is not an MCP tool and is not reachable from either MCP server.
+Limit: an importer holds a live bearer token and can do whatever the token allows. These guards stop accidents and token leakage, not a malicious importer. The setup entry cannot know who calls it: an app must protect its own setup page.
 
 ## Hosted server (Cloudflare Workers)
 
