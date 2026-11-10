@@ -608,7 +608,25 @@ const events = await skylight.calendar.events({ from: "2026-11-09", to: "2026-11
 
 Read methods only: `calendar.events`, `calendar.sources`, `profiles.list`, `chores.list`, `meals.sittings`, `meals.recipes`, `meals.categories`, `lists.list`, `lists.items`. They return plain objects, never raw Skylight records: no emails, event uids, calendar or account ids, or subscription feed addresses (a feed shows only its host; an email-shaped calendar label is replaced). Event ids are opaque: a repeating event's occurrence ids change after a time edit, so do not store or compare them.
 
-What is not there, on purpose: writes, deletes, messages, source-calendar and feed management, login, and any function that takes a URL or a feed address. There is no host or fetch option; the API host is fixed in code and an unknown option is refused. Only the package root is importable (deep imports such as `dist/api/client.js` fail). The library holds a live sign-in, so it stops accidents and token leaks, not a malicious importer. Not verified against the live API yet.
+What is not there, on purpose: writes, deletes, messages, source-calendar and feed management, and any function that takes a URL or a feed address (sign-in lives in the separate setup entry below, which accepts exactly one address: the Skylight redirect you paste). There is no host or fetch option; the API host is fixed in code and an unknown option is refused. Only the package root and `/setup` are importable (deep imports such as `dist/api/client.js` fail). The library holds a live sign-in, so it stops accidents and token leaks, not a malicious importer. Verified read-only against a real frame on 2026-11-09 (chores and list items were empty that day).
+
+### Signing in from your own app (setup entry, experimental)
+
+An app that keeps its own credential store signs in with the same browser-paste flow as the CLI, through a separate entry. Call it from a setup page only, and protect that page yourself.
+
+```ts
+import { beginLogin, completeLogin, loginStatus } from "@davidwoods/skylight-mcp/setup";
+
+const { loginUrl } = await beginLogin({ pending });          // show loginUrl; the person signs in at Skylight
+await completeLogin({ pending, credential, redirectUrl });   // the https://ourskylight.com/welcome?code=... address they paste
+await loginStatus({ credential });                           // { signedIn, expired, expiresAt }
+```
+
+- `pending` is your store for the ten-minute pending sign-in: `save(value)` and an atomic `take()` (read and delete in one step). `credential` is the same store you give `createSkylight`.
+- Nothing secret is returned: the credential is written straight into your store. PKCE (S256) and the state check are always on, and a pending sign-in works once.
+- The pasted address must be the Skylight redirect (`https://ourskylight.com/welcome`); anything else is refused before any request and is never echoed in an error. There is no host or fetch option.
+- Give each app its own sign-in. Refresh tokens rotate, so two apps sharing one credential break each other. Whether a new sign-in ends other sessions on the same account is not verified.
+- Not verified against live Skylight yet: only against a stubbed token endpoint.
 
 ## Skylight API calls used
 

@@ -81,6 +81,10 @@
       "types": "./dist/lib.d.ts",
       "default": "./dist/lib.js"
     },
+    "./setup": {
+      "types": "./dist/setup.d.ts",
+      "default": "./dist/setup.js"
+    },
     "./package.json": "./package.json"
   }
 }

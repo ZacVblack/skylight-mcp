@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Setup entry for library importers (experimental): `import { beginLogin, completeLogin, loginStatus } from "@davidwoods/skylight-mcp/setup"`. The browser-paste sign-in (PKCE S256, state check, single-use ten-minute pending sign-in) for an app with its own credential store. No function returns a token; the credential is written straight into the store. The only address accepted is the pasted Skylight redirect. Not verified against live Skylight.
+
 ## [1.19.0] - 2026-11-09
 
 ### Added

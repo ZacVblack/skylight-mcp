@@ -68,20 +68,21 @@ function fixtures(over: Record<string, unknown> = {}): Record<string, unknown> {
 }
 
 /** Run `body` (ESM source) in a child that imports the package and has fetch stubbed. Returns parsed stdout and recorded calls. */
-function runImporter(body: string, fx: Record<string, unknown> = fixtures(), argv: string[] = []): { out: unknown; calls: Array<{ url: string; host: string; auth: string | null }>; stderr: string; status: number | null } {
+type Call = { url: string; host: string; auth: string | null; method?: string; body?: string | null };
+function runImporter(body: string, fx: Record<string, unknown> = fixtures(), argv: string[] = [], prelude = ""): { out: unknown; calls: Call[]; stderr: string; status: number | null } {
   const fxFile = path.join(tmp, "fx.json");
   const callsFile = path.join(tmp, "calls.json");
   fs.writeFileSync(fxFile, JSON.stringify(fx));
   fs.rmSync(callsFile, { force: true });
   const script = path.join(proj, "run.mjs");
-  fs.writeFileSync(script, `import * as lib from "${PKG}";\nconst result = await (async () => {\n${body}\n})();\nconsole.log(JSON.stringify(result ?? null));\n`);
+  fs.writeFileSync(script, `import * as lib from "${PKG}";\n${prelude}\nconst result = await (async () => {\n${body}\n})();\nconsole.log(JSON.stringify(result ?? null));\n`);
   const r = spawnSync(process.execPath, ["--import", path.join(repo, "tests/library/stub-fetch.mjs"), script, ...argv], {
     cwd: proj,
     encoding: "utf8",
     env: { PATH: process.env.PATH ?? "", LIB_FIXTURES: fxFile, LIB_CALLS: callsFile },
     timeout: 30_000,
   });
-  const calls = fs.existsSync(callsFile) ? (JSON.parse(fs.readFileSync(callsFile, "utf8")) as Array<{ url: string; host: string; auth: string | null }>) : [];
+  const calls = fs.existsSync(callsFile) ? (JSON.parse(fs.readFileSync(callsFile, "utf8")) as Call[]) : [];
   let out: unknown = null;
   try {
     out = JSON.parse(r.stdout.trim().split("\n").pop() ?? "null");
@@ -258,5 +259,191 @@ describe("library entry, from the importer's side (packed package)", () => {
     const dts = fs.readFileSync(path.join(proj, "node_modules/@davidwoods/skylight-mcp/dist/lib.d.ts"), "utf8");
     expect(dts).toMatch(/opaque/i);
     expect(dts).toMatch(/CHANGE after a time edit/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Setup-only entry (@davidwoods/skylight-mcp/setup): the browser-paste sign-in for an importer's own store.
+
+const AT = "AT-secret-1";
+const RT = "RT-secret-1";
+const CODE = "CODE-secret-1";
+const tokenOk = { "/oauth/token": { access_token: AT, refresh_token: RT, expires_in: 3600 } };
+
+const SETUP_PRELUDE = `import * as setup from "${PKG}/setup";
+import { createHash } from "node:crypto";
+const pendingStore = () => { let v = null; let takes = 0; return { save: async (x) => { v = x; }, take: async () => { takes++; const x = v; v = null; return x; }, peek: () => v, set: (x) => { v = x; }, takes: () => takes }; };
+const credStore = (failWrite = false) => { let c = null; let writes = 0; return { name: "mem", read: async () => c, write: async (x) => { if (failWrite) throw new Error("disk full " + JSON.stringify(x)); c = x; writes++; }, delete: async () => { const had = !!c; c = null; return had; }, get: () => c, writes: () => writes }; };
+const begin = async () => { const pending = pendingStore(); const started = await setup.beginLogin({ pending }); const record = JSON.parse(pending.peek()); return { pending, started, record, state: new URL(started.loginUrl).searchParams.get("state") }; };
+const redirectFor = (state, code = "${CODE}") => "https://ourskylight.com/welcome?code=" + code + "&state=" + state;
+const attempt = async (fn) => { try { return { ok: await fn() }; } catch (e) { return { name: e?.name, code: e?.code, message: String(e?.message) }; } };`;
+
+const runSetup = (body: string, fx: Record<string, unknown> = tokenOk) => runImporter(body, fx, [], SETUP_PRELUDE);
+
+describe("setup entry, from the importer's side (packed package)", () => {
+  it("S1. the setup entry exports exactly three functions; the root is unchanged; internals stay closed", () => {
+    const { out } = runSetup(`
+      const deep = await attempt(() => import("${PKG}/dist/api/oauth.js"));
+      const deep2 = await attempt(() => import("${PKG}/dist/setup.js"));
+      return { setup: Object.keys(setup).sort(), root: Object.keys(lib).sort(), deep: deep.code, deep2: deep2.code };`);
+    expect(out).toEqual({ setup: ["beginLogin", "completeLogin", "loginStatus"], root: ["createSkylight"], deep: "ERR_PACKAGE_PATH_NOT_EXPORTED", deep2: "ERR_PACKAGE_PATH_NOT_EXPORTED" });
+  });
+
+  it("S2. a full sign-in returns no secret, uses PKCE S256, talks only to the pinned host, and the stored credential works", () => {
+    const { out, calls } = runSetup(
+      `
+      const { pending, started, record, state } = await begin();
+      const login = new URL(started.loginUrl);
+      const credential = credStore();
+      const done = await setup.completeLogin({ pending, credential, redirectUrl: redirectFor(state) });
+      const status = await setup.loginStatus({ credential });
+      const sky = lib.createSkylight({ frameId: "123", timezone: "America/Los_Angeles", credential });
+      await sky.calendar.sources();
+      return {
+        returned: JSON.stringify([started, done, status]),
+        loginHost: login.host, method: login.searchParams.get("code_challenge_method"),
+        challengeOk: login.searchParams.get("code_challenge") === createHash("sha256").update(record.codeVerifier).digest("base64url"),
+        verifier: record.codeVerifier, done, status, stored: credential.get(), pendingLeft: pending.peek(),
+      };`,
+      { ...tokenOk, "/source_calendars": { data: [] } }
+    );
+    const o = out as { returned: string; loginHost: string; method: string; challengeOk: boolean; verifier: string; done: Record<string, unknown>; status: Record<string, unknown>; stored: { accessToken: string; refreshToken: string }; pendingLeft: unknown };
+    expect(o.loginHost).toBe("app.ourskylight.com");
+    expect(o.method).toBe("S256");
+    expect(o.challengeOk).toBe(true);
+    for (const secret of [AT, RT, CODE, o.verifier]) expect(o.returned).not.toContain(secret);
+    expect(Object.keys(o.done).sort()).toEqual(["expiresAt", "signedIn"]);
+    expect(Object.keys(o.status).sort()).toEqual(["expired", "expiresAt", "signedIn"]);
+    expect(o.status).toMatchObject({ signedIn: true, expired: false });
+    expect(o.stored).toMatchObject({ accessToken: AT, refreshToken: RT });
+    expect(o.pendingLeft).toBeNull();
+    // One token exchange, then the client's own reads (a subscription check and the sources call).
+    expect(calls.length).toBeGreaterThanOrEqual(2);
+    for (const c of calls) expect(c.host).toBe("app.ourskylight.com");
+    expect(calls.filter((c) => c.url.includes("/oauth/")).length).toBe(1);
+    expect(calls[0]!.url).toBe("https://app.ourskylight.com/oauth/token");
+    expect(calls[0]!.method).toBe("POST");
+    const sent = new URLSearchParams(calls[0]!.body ?? "");
+    expect(sent.get("grant_type")).toBe("authorization_code");
+    expect(sent.get("code")).toBe(CODE);
+    expect(sent.get("code_verifier")).toBe(o.verifier);
+    for (const c of calls.slice(1)) expect(c.auth).toBe(`Bearer ${AT}`);
+    expect(calls[calls.length - 1]!.url).toContain("/source_calendars");
+  });
+
+  it("S3. any address that is not the pinned Skylight redirect is refused before any request, and never echoed", () => {
+    const { out, calls } = runSetup(`
+      const { pending, state } = await begin();
+      const credential = credStore();
+      const q = "?code=${CODE}&state=" + state;
+      const hostile = [
+        "https://evil.example/welcome" + q,
+        "https://ourskylight.com.evil.example/welcome" + q,
+        "https://ourskylight.com/other" + q,
+        "https://user:hunter2@ourskylight.com/welcome" + q,
+        "http://ourskylight.com/welcome" + q,
+        "https://ourskylight.com:8443/welcome" + q,
+        "https://app.ourskylight.com/welcome" + q,
+        "webcal://feeds.example.com/SECRETFEED/cal.ics",
+        "not a url " + state,
+        5,
+      ];
+      const results = [];
+      for (const redirectUrl of hostile) results.push(await attempt(() => setup.completeLogin({ pending, credential, redirectUrl })));
+      const stillWorks = await attempt(() => setup.completeLogin({ pending, credential: credStore(), redirectUrl: redirectFor(state) }));
+      return { results, writes: credential.writes(), takes: pending.takes(), stillWorks: stillWorks.ok?.signedIn, state };`);
+    const o = out as { results: Array<{ name: string; code: string; message: string }>; writes: number; takes: number; stillWorks: boolean; state: string };
+    expect(o.results.length).toBe(10);
+    for (const r of o.results) {
+      expect(r).toMatchObject({ name: "SkylightSetupError", code: "bad_redirect_url" });
+      for (const bit of ["evil.example", "hunter2", "SECRETFEED", CODE, o.state, "8443"]) expect(r.message).not.toContain(bit);
+    }
+    expect(o.writes).toBe(0);
+    // A mistyped paste does not burn the pending login: the right address still works afterwards.
+    expect(o.stillWorks).toBe(true);
+    expect(calls.length).toBe(1);
+  });
+
+  it("S4. a wrong state, a replay and an expired attempt are each refused, with no request and nothing stored", () => {
+    const { out, calls } = runSetup(`
+      const credential = credStore();
+      const a = await begin();
+      const wrongState = await attempt(() => setup.completeLogin({ pending: a.pending, credential, redirectUrl: redirectFor("0".repeat(32)) }));
+      const afterWrongState = await attempt(() => setup.completeLogin({ pending: a.pending, credential, redirectUrl: redirectFor(a.state) }));
+      const b = await begin();
+      const old = { ...b.record, createdAt: Date.now() - 11 * 60 * 1000 };
+      b.pending.set(JSON.stringify(old));
+      const expired = await attempt(() => setup.completeLogin({ pending: b.pending, credential, redirectUrl: redirectFor(b.state) }));
+      const none = await attempt(() => setup.completeLogin({ pending: pendingStore(), credential, redirectUrl: redirectFor(a.state) }));
+      const junk = pendingStore(); junk.set("{not json");
+      const garbled = await attempt(() => setup.completeLogin({ pending: junk, credential, redirectUrl: redirectFor(a.state) }));
+      return { codes: [wrongState.code, afterWrongState.code, expired.code, none.code, garbled.code], writes: credential.writes(),
+        messages: [wrongState, afterWrongState, expired, none, garbled].map((r) => r.message).join(" | "), secrets: [a.state, b.state, a.record.codeVerifier, b.record.codeVerifier] };`);
+    const o = out as { codes: string[]; writes: number; messages: string; secrets: string[] };
+    expect(o.codes).toEqual(["state_mismatch", "no_pending_login", "expired", "no_pending_login", "no_pending_login"]);
+    expect(o.writes).toBe(0);
+    for (const s of [...o.secrets, CODE]) expect(o.messages).not.toContain(s);
+    expect(calls).toEqual([]);
+  });
+
+  it("S4b. a pending login works exactly once", () => {
+    const { out, calls } = runSetup(`
+      const { pending, state } = await begin();
+      const first = await attempt(() => setup.completeLogin({ pending, credential: credStore(), redirectUrl: redirectFor(state) }));
+      const second = await attempt(() => setup.completeLogin({ pending, credential: credStore(), redirectUrl: redirectFor(state) }));
+      return [first.ok?.signedIn, second.code];`);
+    expect(out).toEqual([true, "no_pending_login"]);
+    expect(calls.length).toBe(1);
+  });
+
+  it("S5. when Skylight refuses, the error is our own words: no response text, code, verifier or token", () => {
+    const { out, calls } = runSetup(
+      `
+      const { pending, state, record } = await begin();
+      const credential = credStore();
+      const refused = await attempt(() => setup.completeLogin({ pending, credential, redirectUrl: redirectFor(state) }));
+      return { refused, writes: credential.writes(), verifier: record.codeVerifier, state };`,
+      { "/oauth/token": { __status: 400, error: "invalid_grant", echoed: `${CODE} ${RT} LEAKY-BODY` } }
+    );
+    const o = out as { refused: { code: string; message: string }; writes: number; verifier: string; state: string };
+    expect(o.refused.code).toBe("skylight_refused");
+    for (const bit of ["LEAKY-BODY", "invalid_grant", CODE, RT, o.verifier, o.state]) expect(o.refused.message).not.toContain(bit);
+    expect(o.writes).toBe(0);
+    expect(calls.length).toBe(1);
+  });
+
+  it("S6. a failed save is not reported as signed in, and leaks nothing; status reads an empty store as signed out", () => {
+    const { out } = runSetup(`
+      const { pending, state } = await begin();
+      const broken = credStore(true);
+      const failed = await attempt(() => setup.completeLogin({ pending, credential: broken, redirectUrl: redirectFor(state) }));
+      const empty = await setup.loginStatus({ credential: credStore() });
+      return { failed, empty, stored: broken.get() };`);
+    const o = out as { failed: { code: string; message: string; ok?: unknown }; empty: unknown; stored: unknown };
+    expect(o.failed.ok).toBeUndefined();
+    expect(o.failed.code).toBe("store_failed");
+    for (const bit of [AT, RT, "disk full"]) expect(o.failed.message).not.toContain(bit);
+    expect(o.empty).toEqual({ signedIn: false, expired: false, expiresAt: null });
+    expect(o.stored).toBeNull();
+  });
+
+  it("S7. unknown options are refused (no host, base URL or fetch), and the types offer none", () => {
+    const { out, calls } = runSetup(`
+      const { pending, state } = await begin();
+      const credential = credStore();
+      const r = [
+        await attempt(() => setup.beginLogin({ pending, baseUrl: "https://evil.example" })),
+        await attempt(() => setup.completeLogin({ pending, credential, redirectUrl: redirectFor(state), fetch: () => {} })),
+        await attempt(() => setup.completeLogin({ pending, credential, redirectUrl: redirectFor(state), host: "evil.example" })),
+        await attempt(() => setup.loginStatus({ credential, apiBase: "https://evil.example" })),
+        await attempt(() => setup.completeLogin({ pending: {}, credential, redirectUrl: redirectFor(state) })),
+        await attempt(() => setup.completeLogin({ pending, credential: { token: "x" }, redirectUrl: redirectFor(state) })),
+      ];
+      return { codes: r.map((x) => x.code), writes: credential.writes(), takes: pending.takes() };`);
+    expect(out).toEqual({ codes: Array(6).fill("bad_options"), writes: 0, takes: 0 });
+    expect(calls).toEqual([]);
+    const dts = fs.readFileSync(path.join(proj, "node_modules", "@davidwoods", "skylight-mcp", "dist", "setup.d.ts"), "utf8");
+    const declarations = dts.replace(/\/\*[\s\S]*?\*\//g, "");
+    for (const word of ["baseUrl", "fetch", "host", "accessToken", "refreshToken", "codeVerifier"]) expect(declarations).not.toContain(word);
   });
 });
