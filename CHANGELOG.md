@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.19.0] - 2026-11-09
+
 ### Added
 - Library entry (experimental): `import { createSkylight } from "@davidwoods/skylight-mcp"`. Read-only Phase 1: calendar events and sources, profiles, chores, meal sittings, recipes and categories, lists and list items, returned as plain objects with no emails, uids, calendar or account ids, or feed addresses. The API host is pinned and cannot be configured. Not verified against the live API.
 
