@@ -3,12 +3,17 @@
 // It makes a NEW, separate sign-in held only in this process's memory: nothing is written to the
 // Keychain, the settings file or disk, and the credential is gone when the script exits (the session
 // is not revoked on Skylight's side). It prints pass/fail and counts, never a token, code or verifier.
+// The pasted redirect address is read with a hidden prompt (a character count shows, never the text).
 // Do not paste the redirect address anywhere except this prompt.
-import readline from "node:readline/promises";
+import { promptHidden } from "../dist/prompt-hidden.js";
+import { openSkylightUrl } from "../dist/open-url.js";
+import { setQuietRequestLog } from "../dist/api/client.js";
 import { beginLogin, completeLogin, loginStatus } from "../dist/setup.js";
 import { createSkylight } from "../dist/lib.js";
 import { readConfigFile } from "../dist/config-file.js";
 
+setQuietRequestLog(true);
+const io = { input: process.stdin, output: process.stdout };
 const cfg = await readConfigFile();
 if (!cfg) { console.error("No settings file. Run `skylight-mcp init` first."); process.exit(2); }
 
@@ -24,15 +29,17 @@ const before = await loginStatus({ credential });
 check(before.signedIn === false, "status before sign-in: signed out");
 
 const started = await beginLogin({ pending });
-console.log("\n1. Open this address in your browser and sign in to Skylight:\n");
+console.log("\n1. Sign in to Skylight. Press Enter and your browser opens the sign-in page.");
+await promptHidden("   Press Enter to open it... ", io);
+const opened = await openSkylightUrl(started.loginUrl).catch(() => false);
+console.log(opened ? "   Opened your browser. Sign in there, then come back here." : "   Could not open a browser here.");
+console.log("   If it did not open, use this address:\n");
 console.log(`   ${started.loginUrl}\n`);
 console.log("2. Skylight bounces through https://ourskylight.com/welcome?code=... too fast to copy.");
 console.log("   Get it from browser history (Cmd-Y, search \"welcome?code\", newest entry, Copy link address).");
 console.log(`   This attempt expires in ${started.expiresInMinutes} minutes.\n`);
 
-const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-const redirectUrl = await rl.question("3. Paste the full address here and press Enter: ");
-rl.close();
+const redirectUrl = await promptHidden("3. Paste the full address here (it is not shown): ", io);
 console.log("");
 
 let done = null;
