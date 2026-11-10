@@ -13,6 +13,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - **Breaking for anyone who imported the package root:** `main` now points to the library (`dist/lib.js`) and an `exports` map makes it the only importable module, so deep imports such as `@davidwoods/skylight-mcp/dist/api/client.js` no longer resolve. The CLI and both MCP servers still run through `bin` (`dist/index.js`) and are unaffected.
 
+## [1.18.1] - 2026-11-09
+
+### Fixed
+- `create_calendar_event` with `calendar` always refused on a real frame: Skylight gives an event's Google account only as a `calendar_account` relationship, and only when the request asks for it (`include=calendar_account`, as the web app does); the lookup read an attribute that is not there. It now asks for the relationship and reads it. The account id is also accepted as a string or a number (it was string-only), and a refusal says how many events it looked at, how many carried a calendar address and what type the account id had (counts and types only, never ids). Found on the first live run, where a refusal gave no way to tell a missing event from a misread field.
+
 ## [1.18.0] - 2026-11-09
 
 ### Added
