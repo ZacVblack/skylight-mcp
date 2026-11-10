@@ -28,7 +28,7 @@ type Post = { url: string; body: Record<string, unknown> };
 const GCAL = "family-secret-addr@group.calendar.example.com";
 const ACCT = "acct-secret-77";
 
-function stub(opts: { withEvent?: boolean } = {}) {
+function stub(opts: { withEvent?: boolean; acct?: unknown; relOnly?: boolean } = {}) {
   const posts: Post[] = [];
   const urls: string[] = [];
   const withEvent = opts.withEvent ?? true;
@@ -53,8 +53,13 @@ function stub(opts: { withEvent?: boolean } = {}) {
         return new Response(JSON.stringify({ data: { id: "99-1900000000", type: "calendar_event", attributes: {} } }), { status: 200 });
       }
       if (u.includes("/calendar_events")) {
+        if (opts.relOnly) {
+          const wantsAccount = u.includes("calendar_account");
+          const ev = { id: "5", type: "calendar_event", attributes: { summary: "Existing", source: "google", calendar_id: GCAL }, ...(wantsAccount ? { relationships: { calendar_account: { data: { type: "calendar_account", id: "rel-acct-9" } } } } : {}) };
+          return new Response(JSON.stringify({ data: [ev] }), { status: 200 });
+        }
         const data = withEvent
-          ? [{ id: "5", type: "calendar_event", attributes: { summary: "Existing", source: "google", calendar_id: GCAL, calendar_account_id: ACCT } }, { id: "7", type: "calendar_event", attributes: { summary: "RO", source: "google", calendar_id: "ro@group.calendar.example.com", calendar_account_id: ACCT } }]
+          ? [{ id: "5", type: "calendar_event", attributes: { summary: "Existing", source: "google", calendar_id: GCAL, calendar_account_id: "acct" in opts ? opts.acct : ACCT } }, { id: "7", type: "calendar_event", attributes: { summary: "RO", source: "google", calendar_id: "ro@group.calendar.example.com", calendar_account_id: ACCT } }]
           : [{ id: "6", type: "calendar_event", attributes: { summary: "Other", source: "skylight" } }];
         return new Response(JSON.stringify({ data }), { status: 200 });
       }
@@ -163,6 +168,28 @@ describe("create_calendar_event with calendar (Google target)", () => {
     expect(out.isError).toBe(true);
     expect(out.text).toContain("Nothing was created");
     expect(s.posts).toEqual([]);
+  });
+
+  it("accepts a numeric account id and sends it back as a number", async () => {
+    const s = stub({ acct: 424242 });
+    await call({ ...one, confirm: true });
+    expect(s.posts[0]!.body.calendar_account_id).toBe(424242);
+  });
+
+  it("when the account id is unusable, says what it saw (counts and types) and never an id", async () => {
+    const s = stub({ acct: null });
+    const out = await call({ ...one, confirm: true });
+    expect(out.isError).toBe(true);
+    expect(out.text).toContain("Looked at 2 events, 2 carry a calendar address, 1 are on this calendar (account id seen as: null)");
+    expect(out.text).not.toContain(GCAL);
+    expect(out.text).not.toContain(ACCT);
+    expect(s.posts).toEqual([]);
+  });
+
+  it("reads the account from the calendar_account relationship, which only appears when asked for", async () => {
+    const s = stub({ relOnly: true });
+    await call({ ...one, confirm: true });
+    expect(s.posts[0]!.body.calendar_account_id).toBe("rel-acct-9");
   });
 
   it("every request still goes to the pinned host", async () => {
