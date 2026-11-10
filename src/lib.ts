@@ -28,7 +28,7 @@ import { getCategories } from "./api/endpoints/categories.js";
 import { getChores } from "./api/endpoints/chores.js";
 import { getListWithItems, getLists } from "./api/endpoints/lists.js";
 import { getMealCategories, getMealSittings, getRecipes, mealCategoryName } from "./api/endpoints/meals.js";
-import { isChoreDone } from "./api/endpoints/chores.js";
+import { isChoreDone, parseOccurrenceId } from "./api/endpoints/chores.js";
 import { addDays } from "./utils/schedule.js";
 import { redactFeedUrl } from "./utils/redact.js";
 import type { CalendarEventResource, CategoryResource, ChoreResource, SourceCalendarResource } from "./api/types.js";
@@ -138,7 +138,12 @@ export interface Skylight {
     sources(): Promise<SourceDto[]>;
   };
   profiles: { list(): Promise<ProfileDto[]> };
-  chores: { list(options: { date: string; profile?: string }): Promise<ChoreDto[]> };
+  /**
+   * Chores for one day (`date`) or a range (`from` and `to`, both included, at most 31 days).
+   * Pass one or the other, not both. A repeating chore appears once per day it falls on; `date`
+   * on each item is that day.
+   */
+  chores: { list(options: { date: string; profile?: string } | { from: string; to: string; profile?: string }): Promise<ChoreDto[]> };
   meals: {
     sittings(range: { from: string; to: string }): Promise<MealSittingDto[]>;
     recipes(): Promise<RecipeDto[]>;
@@ -169,6 +174,10 @@ function assertRange(range: { from: string; to: string }): { from: string; to: s
   const to = assertDate(range?.to, "to");
   if (to < from) throw new Error("to is before from.");
   return { from, to };
+}
+
+function daysBetween(from: string, to: string): number {
+  return Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86_400_000);
 }
 
 function isStore(value: unknown): value is CredentialStore {
@@ -266,7 +275,9 @@ function toChore(chore: ChoreResource, names: Map<string, string>): ChoreDto {
   return {
     id: String(chore.id),
     title: str(a.summary) ?? "",
-    date: str(a.start),
+    // An occurrence of a repeating chore carries its own day in its id ({series}-{YYYY-MM-DD}-{HHMM},
+    // verified live for completions); `start` may be the series' first day.
+    date: parseOccurrenceId(String(chore.id))?.instanceDate ?? str(a.start),
     time: str(a.start_time),
     status: str(a.status) ?? "",
     done: isChoreDone(a.status),
@@ -282,7 +293,8 @@ function toChore(chore: ChoreResource, names: Map<string, string>): ChoreDto {
 
 export function createSkylight(options: CreateSkylightOptions): Skylight {
   const { config, store } = validateOptions(options);
-  const client = new SkylightClient(config, store);
+  // Quiet: no per-request trace lines in the importer's logs. Errors and warnings still print.
+  const client = new SkylightClient(config, store, { quiet: true });
   const run = <T>(fn: () => Promise<T>): Promise<T> => runWithContext({ client, config }, fn);
 
   return {
@@ -310,13 +322,26 @@ export function createSkylight(options: CreateSkylightOptions): Skylight {
     chores: {
       list: (opts) =>
         run(async () => {
-          const date = assertDate(opts?.date, "date");
-          const result = await getChores({ after: date, before: date, includeLate: false, includeUpForGrabs: true });
+          const o = (opts ?? {}) as { date?: unknown; from?: unknown; to?: unknown; profile?: unknown };
+          for (const key of Object.keys(o)) {
+            if (!["date", "from", "to", "profile"].includes(key)) throw new Error(`Unknown option "${key}".`);
+          }
+          let from: string;
+          let to: string;
+          if (o.date !== undefined) {
+            if (o.from !== undefined || o.to !== undefined) throw new Error("Pass date, or from and to, not both.");
+            from = to = assertDate(o.date, "date");
+          } else {
+            ({ from, to } = assertRange({ from: o.from as string, to: o.to as string }));
+            if (daysBetween(from, to) > 30) throw new Error("A chores range is at most 31 days.");
+          }
+          // `before` is inclusive: the one-day call has always sent after = before = the day.
+          const result = await getChores({ after: from, before: to, includeLate: false, includeUpForGrabs: true });
           const names = new Map(result.categories.map((c) => [String(c.id), c.attributes.label ?? ""]));
           let chores = result.chores.map((c) => toChore(c, names));
-          if (opts.profile !== undefined) {
-            if (typeof opts.profile !== "string") throw new Error("profile must be a profile name.");
-            const wanted = opts.profile.trim().toLowerCase();
+          if (o.profile !== undefined) {
+            if (typeof o.profile !== "string") throw new Error("profile must be a profile name.");
+            const wanted = o.profile.trim().toLowerCase();
             chores = chores.filter((c) => c.profile?.toLowerCase() === wanted);
           }
           return chores;

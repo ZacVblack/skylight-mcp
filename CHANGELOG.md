@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed (library and client, from Mantel's import)
+- `chores.list` takes a range (`{ from, to }`, at most 31 days) as well as one `date`; a repeating chore's `date` is now the day of that occurrence (from its id), not the series start. The range is not verified against live Skylight.
+- The library client writes no per-request `[client]` trace lines. The MCP servers are unchanged.
+- **Behaviour change, both servers and the library:** when a refreshed credential cannot be saved, the call now fails with `CredentialSaveError` (`code` `CREDENTIAL_SAVE_FAILED`) and the unsaved credential is dropped, instead of logging and carrying on with a rotated token that only existed in memory. The log line no longer prints the store's error text.
+- README: importer notes on rebuilding the client after a sign-in, the 5-minute profile cache and the save failure.
+
 ### Added
 - Setup entry for library importers (experimental): `import { beginLogin, completeLogin, loginStatus } from "@davidwoods/skylight-mcp/setup"`. The browser-paste sign-in (PKCE S256, state check, single-use ten-minute pending sign-in) for an app with its own credential store. No function returns a token; the credential is written straight into the store. The only address accepted is the pasted Skylight redirect. Not verified against live Skylight.
 
