@@ -262,6 +262,74 @@ describe("library entry, from the importer's side (packed package)", () => {
   });
 });
 
+describe("importer gaps reported by Mantel (2026-11-10)", () => {
+  it("G1. a library client writes no per-request trace lines", () => {
+    const { stderr, status } = runImporter(`
+      const sky = lib.createSkylight({ frameId: "123", timezone: "America/Los_Angeles", credential: { token: "t" } });
+      await sky.calendar.events({ from: "2037-03-03", to: "2037-03-03" });
+      await sky.profiles.list();
+      return true;`);
+    expect(status).toBe(0);
+    expect(stderr).not.toMatch(/\[client\] (GET|POST|PUT|DELETE|Response)/);
+  });
+
+  it("G2. chores take one day or a range; the range is sent as given; bad shapes are refused before any request", () => {
+    const { out, calls } = runImporter(`
+      const sky = lib.createSkylight({ frameId: "123", timezone: "America/Los_Angeles", credential: { token: "t" } });
+      const range = await sky.chores.list({ from: "2037-03-01", to: "2037-03-07" });
+      const refused = [];
+      for (const bad of [{ date: "2037-03-01", from: "2037-03-01", to: "2037-03-02" }, { from: "2037-03-01", to: "2037-04-15" }, { from: "2037-03-07", to: "2037-03-01" }, { from: "2037-03-01" }, { day: "2037-03-01" }]) {
+        try { await sky.chores.list(bad); refused.push("accepted"); } catch (e) { refused.push("refused"); }
+      }
+      return { range, refused };`);
+    const o = out as { range: Array<{ title: string }>; refused: string[] };
+    expect(o.refused).toEqual(["refused", "refused", "refused", "refused", "refused"]);
+    expect(o.range[0]).toMatchObject({ title: "Dishes" });
+    const choreCalls = calls.filter((c) => new URL(c.url).pathname.endsWith("/chores"));
+    expect(choreCalls).toHaveLength(1);
+    const q = new URL(choreCalls[0]!.url).searchParams;
+    expect([q.get("after"), q.get("before")]).toEqual(["2037-03-01", "2037-03-07"]);
+  });
+
+  it("G3. an occurrence of a repeating chore reports its own day, not the series start", () => {
+    const { out } = runImporter(
+      `
+      const sky = lib.createSkylight({ frameId: "123", timezone: "America/Los_Angeles", credential: { token: "t" } });
+      return await sky.chores.list({ from: "2037-03-01", to: "2037-03-07" });`,
+      fixtures({
+        "/chores": {
+          data: [
+            { id: "555-2037-03-04-0800", type: "chore", attributes: { summary: "Feed cat", status: "pending", start: "2037-01-01", recurring: true, routine: true }, relationships: {} },
+            { id: "555-2037-03-05-0800", type: "chore", attributes: { summary: "Feed cat", status: "pending", start: "2037-01-01", recurring: true, routine: true }, relationships: {} },
+            { id: "9", type: "chore", attributes: { summary: "Dishes", status: "pending", start: "2037-03-02", recurring: false }, relationships: {} },
+          ],
+          included: [],
+        },
+      })
+    );
+    expect((out as Array<{ date: string }>).map((c) => c.date)).toEqual(["2037-03-04", "2037-03-05", "2037-03-02"]);
+  });
+
+  it("G4. a refreshed credential that cannot be saved ends the call with CredentialSaveError and no store text", () => {
+    const { out } = runImporter(
+      `
+      const store = {
+        name: "broken-writes",
+        read: async () => ({ version: 1, type: "oauth", accessToken: "AT-old", refreshToken: "RT-old", fingerprint: "f", expiresAt: Date.now() - 1000 }),
+        write: async (c) => { throw new Error("quota exceeded " + JSON.stringify(c)); },
+        delete: async () => true,
+      };
+      const sky = lib.createSkylight({ frameId: "123", timezone: "America/Los_Angeles", credential: store });
+      try { await sky.profiles.list(); return { ok: true }; }
+      catch (e) { return { name: e.name, code: e.code, message: String(e.message) }; }`,
+      fixtures({ "/oauth/token": { access_token: "AT-new-1", refresh_token: "RT-new-1", expires_in: 3600 } })
+    );
+    expect(out).toMatchObject({ name: "CredentialSaveError", code: "CREDENTIAL_SAVE_FAILED" });
+    const message = (out as { message: string }).message;
+    for (const bit of ["quota exceeded", "AT-new-1", "RT-new-1", "RT-old"]) expect(message).not.toContain(bit);
+  });
+});
+
 // ---------------------------------------------------------------------------
 // Setup-only entry (@davidwoods/skylight-mcp/setup): the browser-paste sign-in for an importer's own store.
 

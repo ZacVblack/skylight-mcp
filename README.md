@@ -610,6 +610,13 @@ const events = await skylight.calendar.events({ from: "2026-11-09", to: "2026-11
 
 Read methods only: `calendar.events`, `calendar.sources`, `profiles.list`, `chores.list`, `meals.sittings`, `meals.recipes`, `meals.categories`, `lists.list`, `lists.items`. They return plain objects, never raw Skylight records: no emails, event uids, calendar or account ids, or subscription feed addresses (a feed shows only its host; an email-shaped calendar label is replaced). Event ids are opaque: a repeating event's occurrence ids change after a time edit, so do not store or compare them.
 
+Behaviour an importer should plan for:
+- `chores.list` takes one day (`{ date }`) or a range (`{ from, to }`, both included, at most 31 days), plus an optional `profile`. A repeating chore appears once per day it falls on, and each item's `date` is that day. The range is not yet verified against live Skylight.
+- One `createSkylight` client holds one sign-in and caches what it read from your store, including "nothing stored". After `completeLogin` writes a new credential, or after any `AuthenticationError`, make a new client.
+- Profile names and colours are cached for up to 5 minutes per client, so a renamed profile can show its old name for up to 5 minutes.
+- If a refreshed credential cannot be written to your store, the call fails with `CredentialSaveError` (an `AuthenticationError`, `code` `CREDENTIAL_SAVE_FAILED`). Refresh tokens rotate, so the old one in your store is already spent: treat it as signed out and sign in again. The error never includes your store's own message.
+- The library writes no per-request log lines. Errors and warnings still go to `console.error`.
+
 What is not there, on purpose: writes, deletes, messages, source-calendar and feed management, and any function that takes a URL or a feed address (sign-in lives in the separate setup entry below, which accepts exactly one address: the Skylight redirect you paste). There is no host or fetch option; the API host is fixed in code and an unknown option is refused. Only the package root and `/setup` are importable (deep imports such as `dist/api/client.js` fail). The library holds a live sign-in, so it stops accidents and token leaks, not a malicious importer. Verified read-only against a real frame on 2026-11-09 (chores and list items were empty that day).
 
 ### Signing in from your own app (setup entry, experimental)

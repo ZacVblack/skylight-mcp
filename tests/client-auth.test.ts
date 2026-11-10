@@ -89,6 +89,41 @@ describe("SkylightClient credential handling", () => {
     expect(calls.filter((c) => c.url.endsWith("/oauth/token"))).toHaveLength(1);
   });
 
+  it("fails closed when a refreshed credential cannot be saved: named error, no store text, nothing kept in memory", async () => {
+    const store = memoryStore(fresh({ expiresAt: Date.now() - 1000 }));
+    let failWrites = true;
+    store.write = async (c: StoredCredential) => {
+      if (failWrites) throw new Error(`disk full while writing ${JSON.stringify(c)}`);
+      store.current = c;
+    };
+    const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+    const calls = mockFetch((url) => {
+      if (url.endsWith("/oauth/token")) return json({ access_token: "test-access-2", refresh_token: "test-refresh-2", expires_in: 3600 });
+      if (url.includes("/plus_access")) return json({});
+      return json({ data: [] });
+    });
+    const client = new SkylightClient(config, store);
+    const err = await client.get("/api/frames/{frameId}/chores").catch((e: unknown) => e as Error & { code?: string });
+    expect(err).toMatchObject({ name: "CredentialSaveError", code: "CREDENTIAL_SAVE_FAILED" });
+    expect(err).toBeInstanceOf(Error);
+    const printed = logged.mock.calls.map((c) => String(c[0])).join("\n");
+    for (const text of [err.message, printed]) {
+      expect(text).not.toContain("disk full");
+      expect(text).not.toContain("test-access-2");
+      expect(text).not.toContain("test-refresh-2");
+    }
+    // No API request was sent with the unsaved token.
+    expect(calls.filter((c) => !c.url.endsWith("/oauth/token") && !c.url.includes("/plus_access"))).toHaveLength(0);
+    // The client did not keep the unsaved credential: the next call goes back to the store
+    // (still holding the old, spent one) and refreshes from that, instead of quietly using memory.
+    failWrites = false;
+    await client.get("/api/frames/{frameId}/chores");
+    const refreshes = calls.filter((c) => c.url.endsWith("/oauth/token"));
+    expect(refreshes).toHaveLength(2);
+    expect(new URLSearchParams(String(refreshes[1]!.init.body)).get("refresh_token")).toBe("test-refresh-1");
+    logged.mockRestore();
+  });
+
   it("explains how to sign in when nothing is configured", async () => {
     mockFetch(() => json({}));
     const client = new SkylightClient(config, memoryStore(null));

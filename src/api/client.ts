@@ -6,6 +6,7 @@ import { currentContext } from "../context.js";
 import { OAuthError, isExpired, refreshCredential, type StoredCredential } from "./oauth.js";
 import {
   AuthenticationError,
+  CredentialSaveError,
   NotFoundError,
   RateLimitError,
   SkylightError,
@@ -51,14 +52,22 @@ export class SkylightClient {
   private stored: StoredCredential | null = null;
   private storedLoaded = false;
   private refreshPromise: Promise<StoredCredential> | null = null;
+  private readonly quiet: boolean;
 
   /**
    * @param store Where the OAuth credential lives. `null` means "no stored
    * credential is available" (hosted mode, where the token arrives in config).
+   * @param options.quiet No per-request trace lines (the library sets this; an importer's
+   * logs are not ours to fill). Errors and warnings still print.
    */
-  constructor(config?: Config, store: CredentialStore | null = null) {
+  constructor(config?: Config, store: CredentialStore | null = null, options: { quiet?: boolean } = {}) {
     this.config = config ?? getConfig();
     this.store = store;
+    this.quiet = options.quiet === true;
+  }
+
+  private get traceOff(): boolean {
+    return quietRequestLog || this.quiet;
   }
 
   private getStore(): CredentialStore {
@@ -108,13 +117,18 @@ export class SkylightClient {
           }
           throw error;
         }
-        this.stored = next;
         try {
           await this.getStore().write(next);
-        } catch (error) {
-          // The rotated refresh token is only in memory now; this session keeps working.
-          console.error(`[client] Could not save refreshed credential: ${(error as Error).message}`);
+        } catch {
+          // Fail closed. The store's message is not printed: it could contain the credential.
+          // Forget everything held in memory so no later call quietly keeps a session that a
+          // restart could not recover; the next call re-reads the store and asks for a sign-in.
+          console.error("[client] Could not save the refreshed credential; this session has ended.");
+          this.stored = null;
+          this.storedLoaded = false;
+          throw new CredentialSaveError();
         }
+        this.stored = next;
         return next;
       })().finally(() => {
         this.refreshPromise = null;
@@ -275,7 +289,7 @@ export class SkylightClient {
     const resolvedEndpoint = endpoint.replace("{frameId}", this.config.frameId);
     const url = this.buildUrl(resolvedEndpoint, params);
 
-    if (!quietRequestLog) console.error(`[client] ${method} ${redactForLog(url)}`);
+    if (!this.traceOff) console.error(`[client] ${method} ${redactForLog(url)}`);
 
     const headers: Record<string, string> = {
       Authorization: await this.getAuthHeader(),
@@ -294,7 +308,7 @@ export class SkylightClient {
       body: body ? JSON.stringify(body) : undefined,
     });
 
-    if (!quietRequestLog) console.error(`[client] Response: ${response.status}`);
+    if (!this.traceOff) console.error(`[client] Response: ${response.status}`);
 
     if (!response.ok) {
       // Retry once on 401 with a fresh credential (not for an explicit token)

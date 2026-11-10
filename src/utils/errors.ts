@@ -24,6 +24,20 @@ export class AuthenticationError extends SkylightError {
 }
 
 /**
+ * A refreshed credential could not be saved. Refresh tokens rotate, so the old one in the store
+ * is now spent and the new one would exist only in memory: a restart would come back signed out
+ * without saying why. Fail closed instead: the caller learns now and can sign in again.
+ * Never carries the store's own error text, which could contain the credential.
+ */
+export class CredentialSaveError extends AuthenticationError {
+  constructor() {
+    super("Skylight issued a new sign-in but it could not be saved, so this session has ended. Sign in again.");
+    this.name = "CredentialSaveError";
+    this.code = "CREDENTIAL_SAVE_FAILED";
+  }
+}
+
+/**
  * Configuration error - missing or invalid settings
  */
 export class ConfigurationError extends SkylightError {
