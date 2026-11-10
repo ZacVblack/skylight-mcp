@@ -1,6 +1,6 @@
 {
   "name": "@davidwoods/skylight-mcp",
-  "version": "1.18.0",
+  "version": "1.18.1",
   "description": "Unofficial MCP server for Skylight Calendar: local (stdio) and hosted (Cloudflare Workers), with browser-paste OAuth sign-in and an encrypted credential store",
   "type": "module",
   "main": "dist/index.js",
