@@ -431,7 +431,7 @@ last captured are recorded in the repository's build log.
 
 | Area | What works | Hosted server (Claude Duet) | Status |
 |------|------------|------------------------------|--------|
-| Calendar | Read events and source calendars; create (with profiles), update, delete events | Everything except delete (local only) | Read, create and delete live-tested; update inherited |
+| Calendar | Read events and source calendars; create (with profiles), update, delete events | All, delete included (preview first; never subscribed feed events). Removing a synced calendar or a label is local only | Read, create and delete live-tested; update inherited |
 | Planning | Week overview, conflicts, free slots, bulk meal plan | All four | Week overview live-tested; the rest mocked only |
 | Meals (Plus) | Read categories and meals; create, rename, move, delete one-off meals | All, delete included | Live-tested |
 | Recipes (Plus) | Read, create, update, delete recipes; push ingredients to the grocery list | All, delete included | Inherited |
@@ -468,7 +468,9 @@ tool, update this section in the same change.
 
 Effects: **read** changes nothing; **write** creates or edits and can be edited
 again; **destructive** cannot be undone from the API. The hosted server registers
-read and write only, so destructive tools exist on the local server alone.
+read and write tools plus a fixed list of deletes, each preview-first (see "Which tools the hosted server exposes, and why"); `delete_source_calendar` and `delete_label` exist on the local server alone.
+
+Every tool refuses an argument it does not know and names it, so a misspelt argument is an error, never a call that quietly ran with defaults.
 
 ### Planning Tools
 

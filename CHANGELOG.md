@@ -10,6 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Setup entry for library importers (experimental): `import { beginLogin, completeLogin, loginStatus } from "@davidwoods/skylight-mcp/setup"`. The browser-paste sign-in (PKCE S256, state check, single-use ten-minute pending sign-in) for an app with its own credential store. No function returns a token; the credential is written straight into the store. The only address accepted is the pasted Skylight redirect. Not verified against live Skylight.
 
+### Changed
+- Every tool now refuses an argument it does not know, naming it, on both servers; published schemas say `additionalProperties: false`. Before, unknown arguments were dropped silently: `find_conflicts` called with `startsAt`/`endsAt` (it takes `date`/`dateEnd`) checked its default week, and `create_chore` called with the removed `recurring` argument quietly made a one-off chore. A client that sends extra arguments will now get an error instead of a call that ignores them.
+
 ## [1.19.0] - 2026-11-09
 
 ### Added

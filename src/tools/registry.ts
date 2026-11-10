@@ -10,6 +10,7 @@
  * cannot ship unlabelled.
  */
 
+import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { ToolAnnotations } from "@modelcontextprotocol/sdk/types.js";
 import { registerCalendarTools } from "./calendar.js";
@@ -187,7 +188,17 @@ export function registerTools(server: McpServer, options: RegisterToolsOptions):
     registered.push(name);
     const callback = guardedCallback(name, effect, rest.pop(), guard);
     // Insert annotations before the callback: tool(name, description?, schema?, annotations, cb)
-    return (server.tool as (...args: unknown[]) => unknown)(name, ...rest, annotationsFor(effect), callback);
+    const tool = (server.tool as (...args: unknown[]) => unknown)(name, ...rest, annotationsFor(effect), callback) as { inputSchema?: unknown };
+    // Refuse, never ignore: the SDK builds a schema that silently drops arguments it does not
+    // know, so a misspelt argument (startsAt for date) ran the tool with its defaults and the
+    // caller believed it had been used. Strict schemas turn that into an error naming the key.
+    // The SDK's schema is a Zod 4 object with the shape on `_zod.def.shape`; rebuild it strict.
+    const shape = (tool.inputSchema as { _zod?: { def?: { shape?: z.ZodRawShape } } } | undefined)?._zod?.def?.shape;
+    if (tool.inputSchema !== undefined && shape === undefined) {
+      throw new Error(`Tool "${name}" has an argument schema that cannot be made strict; give it a plain shape.`);
+    }
+    tool.inputSchema = z.strictObject(shape ?? {});
+    return tool;
   }) as McpServer["tool"];
 
   registerCalendarTools(filtered, allowed);
