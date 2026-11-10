@@ -470,6 +470,8 @@ Effects: **read** changes nothing; **write** creates or edits and can be edited
 again; **destructive** cannot be undone from the API. The hosted server registers
 read and write only, so destructive tools exist on the local server alone.
 
+Every tool refuses an argument it does not know and names it, so a misspelt argument is an error, never a call that quietly ran with defaults.
+
 ### Planning Tools
 
 Built for "what does the week look like and what is for dinner" questions.

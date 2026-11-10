@@ -100,11 +100,12 @@ describe("create_chore", () => {
     expect(writes(seen)).toHaveLength(0);
   });
 
-  it("no longer accepts recurrence arguments", async () => {
+  it("refuses the removed recurrence arguments instead of quietly making a one-off chore", async () => {
     const seen = stub();
     const r = await call("create_chore", { summary: "Dishes", date: "2026-11-09", assignee: "Jordan", recurring: true, recurrencePattern: "daily" });
-    expect(writes(seen)[0].body).toMatchObject({ recurrence_set: null, routine: false });
-    expect(r.text).not.toMatch(/Recurring: Yes/);
+    expect(r.isError).toBe(true);
+    expect(r.text).toContain("recurring");
+    expect(writes(seen)).toEqual([]);
   });
 });
 
